@@ -270,7 +270,7 @@
   }
 
   // ---------- state ----------
-  let messages = [];                   // shown: feed + live extras, newest first
+  let messages = [];                   // feed (oldest first) plus live items not in the feed yet
   let feedMsgs = [];                   // decrypted feed
   let live = [];                       // entries that arrived live but aren't in the fetched feed yet
   let outbox = getJSON(LS_OUT, []);    // [{id,t,armored,state}] wearer messages not yet in the feed
@@ -292,7 +292,17 @@
     const a = $('auto-btn'); a.textContent = 'Auto-read: ' + (auto ? 'On' : 'Off'); a.setAttribute('aria-pressed', String(auto));
     const v = $('saver-btn'); v.textContent = 'Saver: ' + (saver ? 'On' : 'Off'); v.setAttribute('aria-pressed', String(saver));
   }
-  const latestChief = () => messages.find((m) => m.role === 'chief');
+  // Newest assistant message by timestamp. The feed is oldest-first, so the
+  // first Chief message is not the latest. A tied timestamp keeps the later one.
+  function latestChief() {
+    let best = null, bestT = -Infinity, bestI = -1;
+    messages.forEach((m, i) => {
+      if (m.role !== 'chief') return;
+      const t = Date.parse(m.t) || 0;
+      if (!best || t > bestT || (t === bestT && i > bestI)) { best = m; bestT = t; bestI = i; }
+    });
+    return best;
+  }
   const scrollEnd = () => { const sc = $('scroll'); sc.scrollTop = sc.scrollHeight; };
   function applyLabels() {
     $('banner').textContent = 'New reply from ' + assistantName;
@@ -348,8 +358,8 @@
       prev = n.li;
     }
     for (const [key, n] of nodes) if (!keep.has(key)) { n.li.remove(); nodes.delete(key); }
-    let latestKey = null;
-    for (const m of list) if (m.role === 'chief') latestKey = m.id ? 'i:' + m.id : 'c:' + m.ct;
+    const newest = latestChief();
+    const latestKey = newest ? (newest.id ? 'i:' + newest.id : 'c:' + newest.ct) : null;
     for (const [key, n] of nodes) n.li.classList.toggle('latest', key === latestKey);
     placeQuick(list);
     $('empty').hidden = list.length > 0;
