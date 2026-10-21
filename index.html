@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Chief: encrypted replies from your assistant, on your glasses.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#000000">
+  <title>Chief</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css?v=5">
+  <script defer src="config.js?v=3"></script>
+  <script defer src="app.js?v=7"></script>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <section id="lock" class="screen" hidden>
+      <h1 class="brand"><img src="logo-64.png" alt="" class="logo" width="32" height="32"> Chief</h1>
+      <form id="unlock-form" class="unlock" autocomplete="off">
+        <label for="pass">Passphrase</label>
+        <div class="pass-row">
+          <input id="pass" type="password" class="secret focusable" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Write or speak passphrase">
+          <button type="button" id="pass-toggle" class="quiet focusable" aria-pressed="false" aria-label="Show passphrase">Show</button>
+        </div>
+        <button type="submit" id="unlock-btn" class="focusable">Unlock</button>
+      </form>
+      <p id="lock-status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="feed" class="screen feed" hidden>
+      <header class="top">
+        <span class="brand small"><img src="logo-64.png" alt="" class="logo" width="32" height="32"> Chief</span>
+        <span id="checked" class="checked" aria-live="polite"></span>
+      </header>
+      <button type="button" id="banner" class="banner focusable" role="alert" hidden>New reply</button>
+      <p id="error" class="error" role="alert" hidden></p>
+      <div id="scroll" class="scroll focusable" tabindex="0" role="region" aria-label="Messages">
+        <p id="empty" class="empty">No messages yet.</p>
+        <ol id="convo" class="convo" aria-live="polite"></ol>
+      </div>
+      <!-- Outside the scrolling transcript so directional focus can leave and return. -->
+      <div id="quick-replies" class="quick-replies" role="group" aria-label="Quick replies">
+        <button type="button" data-text="Yes">Yes</button>
+        <button type="button" data-text="No">No</button>
+        <button type="button" data-text="Later">Later</button>
+        <button type="button" data-text="Tell me more">Tell me more</button>
+      </div>
+      <form id="compose" class="compose" autocomplete="off">
+        <input id="msg" type="text" class="focusable" enterkeyhint="send" autocomplete="off" maxlength="2000" placeholder="Message" aria-label="Message">
+        <button type="submit" id="send-btn" class="send focusable">Send</button>
+      </form>
+      <p id="send-status" class="send-status" role="status" aria-live="polite"></p>
+      <nav class="controls" aria-label="Controls">
+        <button type="button" id="read-btn" class="focusable">Read aloud</button>
+        <button type="button" id="refresh-btn" class="focusable">Refresh</button>
+        <button type="button" id="auto-btn" class="focusable" aria-pressed="true">Auto-read: On</button>
+        <button type="button" id="saver-btn" class="focusable" aria-pressed="true" aria-label="Battery saver">Saver: On</button>
+        <button type="button" id="forget-btn" class="quiet focusable" aria-label="Forget passphrase">Forget</button>
+      </nav>
+    </section>
+
+    <div id="confirm" class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text" hidden>
+      <p id="confirm-text">Forget key? This signs you out of Chief.</p>
+      <div class="confirm-actions">
+        <button type="button" id="confirm-cancel" class="choice focusable">Cancel</button>
+        <button type="button" id="confirm-forget" class="quiet focusable">Forget</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

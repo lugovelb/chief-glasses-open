@@ -1,0 +1,88 @@
+/* Additive display: black = pixels off. Outlined, dim UI; no fills, shadows, blur, animations or transitions. */
+* { box-sizing: border-box; }
+html, body, #app { inline-size: 100%; block-size: 100%; }
+body {
+  margin: 0; min-inline-size: 0; background: #000; color: #d8d8d8;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: clamp(18px, 4.2vmin, 28px); line-height: 1.3;
+}
+[hidden] { display: none !important; }
+.app-shell { position: relative; inline-size: 100%; block-size: 100%; overflow: hidden; padding: 3vmin 4vmin; border: 3px solid transparent; }
+body.new .app-shell { border-color: #c9a250; }   /* new reply: one static border change, cleared after 6 s */
+.screen { inline-size: 100%; block-size: 100%; min-block-size: 0; }
+.brand { margin: 0 0 0.6em; font-size: 2em; font-weight: 800; color: #6cc7e0; display: flex; align-items: center; gap: 0.3em; }
+.brand.small { font-size: 1.05em; margin: 0; }
+.logo { inline-size: 1.2em; block-size: 1.2em; opacity: 0.85; }
+.unlock { display: flex; flex-direction: column; gap: 0.6em; }
+.pass-row { display: flex; gap: 0.35em; align-items: stretch; }
+.pass-row input { flex: 1 1 auto; }
+.pass-row button { flex: 0 0 auto; min-inline-size: 4.4em; }
+label { font-size: 1.1em; font-weight: 600; }
+input {
+  font: inherit; font-size: 1.1em; color: #e8e8e8; background: #000; border: 2px solid #6a6a6a;
+  border-radius: 0.5em; padding: 0.45em 0.6em; inline-size: 100%; min-inline-size: 0;
+}
+input::placeholder { color: #7a7a7a; }
+input.secret { -webkit-text-security: disc; }
+button {
+  font: inherit; font-weight: 700; color: #d8d8d8; background: #000; border: 2px solid #6a6a6a;
+  border-radius: 0.6em; padding: 0.35em 0.5em; min-block-size: 2.2em; cursor: pointer;
+}
+button:disabled { opacity: 0.45; }
+button.quiet { color: #a8a8a8; border-color: #4a4a4a; font-weight: 500; }
+button:active { border-color: #d8d8d8; }
+/* D-pad focus must be visible. The glasses move focus with arrow keys, not a cursor. */
+:where(button, input, .focusable):focus {
+  outline: 3px solid #6cc7e0;
+  outline-offset: 2px;
+}
+.status { margin-top: 0.8em; color: #e0bf7a; }
+.feed { display: flex; flex-direction: column; gap: 0.3em; }
+.feed > * { flex: 0 0 auto; }
+.feed > .scroll { flex: 1 1 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 0.5em; }
+.checked { color: #8a8a8a; font-size: 0.7em; text-align: end; }
+.error { margin: 0; padding: 0.25em 0.5em; color: #f0a0a0; border: 2px solid #b04a4a; border-radius: 0.4em; font-weight: 700; font-size: 0.85em; }
+.banner { inline-size: 100%; color: #e0bf7a; border-color: #c9a250; font-size: 1em; min-block-size: 1.9em; }
+.scroll { min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; padding-inline-end: 0.2em; }
+#scroll:focus { outline: 3px solid #6cc7e0; outline-offset: -3px; }
+.empty { color: #8a8a8a; margin: 0.3em 0; }
+.convo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35em; }
+.msg { max-inline-size: 88%; border-radius: 0.7em; padding: 0.3em 0.55em; white-space: pre-wrap; overflow-wrap: anywhere; border: 2px solid; }
+.msg.chief { align-self: flex-start; border-color: #2f6a80; border-end-start-radius: 0.15em; }
+.msg.owner { align-self: flex-end; border-color: #4a62a8; border-end-end-radius: 0.15em; }
+.msg.pending { border-style: dashed; }
+.msg .time { display: block; font-size: 0.68em; font-weight: 700; color: #6cc7e0; }
+.msg.owner .time { color: #9fb2e6; text-align: end; }
+.msg .text { font-size: 1em; font-weight: 600; color: #dcdcdc; }
+.msg.owner .text { color: #c8d2f0; }
+.msg.chief.latest .text { font-size: 1.12em; color: #ececec; }
+/* Not a scroller. Directional focus walks onto these buttons from the message box and the controls. */
+.quick-replies {
+  display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0; padding: 0;
+  align-self: stretch; max-inline-size: 100%; overflow: visible;
+}
+.quick-replies button {
+  flex: 1 1 auto; white-space: nowrap; min-block-size: 2.8em;
+  font-size: 0.92em; padding-inline: 0.45em;
+}
+.msg.failed { border-color: #b04a4a; border-style: solid; cursor: pointer; }
+.msg.failed .time { color: #f0a0a0; }
+.compose { display: flex; gap: 0.35em; }
+.compose input { flex: 1 1 auto; }
+.send { flex: 0 0 auto; min-inline-size: 4.2em; font-size: 1.15em; color: #7fe0a8; border-color: #3f9a68; }
+.send-status { margin: 0; min-block-size: 1.1em; font-size: 0.78em; font-weight: 700; color: #a8a8a8; }
+.send-status[data-kind="ok"] { color: #7fe0a8; }
+.send-status[data-kind="err"] { color: #f0a0a0; }
+.send-status[data-kind="busy"] { color: #e0bf7a; }
+.controls { display: flex; gap: 0.25em; }
+.controls button { flex: 1 1 0; font-size: 0.62em; padding-inline: 0.2em; min-block-size: 2.6em; }
+.confirm {
+  position: absolute; inset: 0; z-index: 3; background: #000; color: #ececec;
+  display: flex; flex-direction: column; justify-content: center; gap: 0.9em; padding: 5vmin 3vmin;
+}
+.confirm p { margin: 0; font-size: 1.35em; font-weight: 800; line-height: 1.25; }
+.confirm-actions { display: flex; gap: 0.45em; }
+.confirm-actions button { flex: 1 1 0; min-block-size: 3.2em; font-size: 1.15em; }
+.confirm .choice { color: #6cc7e0; border-color: #6cc7e0; border-width: 3px; }
+.confirm .focusable:focus { outline: 3px solid #6cc7e0; outline-offset: 2px; }

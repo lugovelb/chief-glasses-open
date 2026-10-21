@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Chief",
+  "description": "Encrypted chat with your chief-of-staff assistant.",
+  "appearance": {
+    "theme_color": "#2F5BD3",
+    "icon": {
+      "src": "../glyph-512.png",
+      "type": "monochrome"
+    }
+  }
+}
