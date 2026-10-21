@@ -28,44 +28,19 @@ if [ ! -x .venv/bin/python ]; then
     echo "If the message above mentions ensurepip, install the python3-venv package and run this again."
     exit 1
   fi
-  .venv/bin/python -m pip install -r requirements.txt || exit 1
-fi
-
-printf 'Passphrase (it will not be shown): '
-if [ -t 0 ]; then
-  read -r -s CHIEF_PASSPHRASE || exit 1
-  printf '\n'
-else
-  IFS= read -r CHIEF_PASSPHRASE || exit 1
-fi
-export CHIEF_PASSPHRASE
-if [ -z "$CHIEF_PASSPHRASE" ]; then
-  echo "Passphrase was empty."
-  unset CHIEF_PASSPHRASE
-  exit 1
-fi
-
-printf 'Message: '
-IFS= read -r MSG || exit 1
-if [ -z "$MSG" ]; then
-  echo "Message was empty."
-  unset CHIEF_PASSPHRASE
-  exit 1
-fi
-
-.venv/bin/python publish.py "$MSG"
-code=$?
-if [ "$code" -ne 0 ]; then
-  echo "The sample feed uses a different passphrase."
-  printf 'Type yes to start a new feed and remove the sample: '
-  IFS= read -r AGAIN || AGAIN=""
-  if [ "$AGAIN" = "yes" ]; then
-    .venv/bin/python publish.py --new "$MSG"
-    code=$?
+  if ! .venv/bin/python -m pip install -r requirements.txt; then
+    rm -rf .venv
+    echo "Could not install what the send script needs. The unfinished toolbox folder was removed."
+    exit 1
   fi
 fi
 
-unset CHIEF_PASSPHRASE
+# publish.py exits 2 only when the passphrase does not open the feed.
+# It offers to replace the file only for that case, and only while feed.json
+# is still the shipped sample. A wrong passphrase never deletes a real feed.
+.venv/bin/python publish.py --interactive
+code=$?
+
 if [ "$code" -eq 0 ]; then
   echo "Next: on GitHub, use Add file, Upload files, and commit the new feed.json to main."
   echo "Upload only feed.json. Do not upload the .venv folder."

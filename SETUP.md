@@ -15,9 +15,9 @@ Chief is not affiliated with Meta.
 ## Checklist
 
 - [ ] 1. Open the live demo and type the demo passphrase.
-- [ ] 2. Click **Use this template** (or **Fork** if that button is not there yet).
+- [ ] 2. Click **Use this template** (or **Fork** if that button is not there yet). Choose **Public**.
 - [ ] 3. Edit `config.js` with the pencil. Skip the `YOUR_` lines until you want Send.
-- [ ] 4. Turn on Pages: **Settings**, **Pages**, branch **main**, folder **/ (root)**.
+- [ ] 4. Turn on Pages: **Settings**, **Pages**, **Deploy from a branch**, branch **main**, folder **/ (root)**.
 - [ ] 5. Open your site and type the demo passphrase. A red "not set up" line on Send is expected.
 
 The template button is enabled at go-live under **Settings**, **General**, **Template repository**. You do not need to flip that yourself.
@@ -42,7 +42,7 @@ Send needs one of line 9, line 14, or line 19. Lines 9 and 14 are email. Line 19
 ## Send a message without git
 
 1. On your copy, click **Code**, then **Download ZIP**, and unzip it.
-2. Double-click `send-message.bat` (Windows) or `send-message.sh` (Mac or Linux). Type the passphrase (hidden), then the message. The first time, type `yes` to replace the sample.
+2. Double-click `send-message.bat` (Windows) or `send-message.sh` (Mac or Linux). This needs Python from [python.org](https://www.python.org/downloads/). Type the passphrase (hidden), then the message. The first time, while the file is still the sample, type `START OVER`. A backup is saved, then the sample is replaced.
 3. On GitHub, **Add file**, **Upload files**, and commit the new `feed.json` only. Do not upload `.venv`.
 
 If `send-message.sh` opens as text: in Terminal, `cd` into the unzipped folder (you are then in the project folder) and run `./send-message.sh`.
@@ -119,7 +119,7 @@ git commit -m "Update the message feed"
 git push
 ```
 
-`--new` removes the sample. Later replies use the same publish command **without** `--new`, then commit and push `feed.json` again. The script reads the passphrase from the environment and does not print it. Do not commit the passphrase.
+`--new` removes the sample after saving `feed.backup-<timestamp>.json`. Later replies use the same publish command **without** `--new`, then commit and push `feed.json` again. The script asks for the passphrase and does not print it. Do not commit the passphrase.
 
 The file keeps the newest 20 messages.
 
@@ -165,7 +165,7 @@ Use your `https://` Pages address and the passphrase you publish with.
 
 **Can I use this without the glasses?** Yes. Any modern browser can open the page.
 
-**What if I lose the passphrase?** Old messages cannot be read. Run the helper again and type `yes` to start a new feed, or run `publish.py --new`. Older scrambled copies can still exist in GitHub history.
+**What if I lose the passphrase?** Old messages cannot be read. Run `publish.py --new` with a new passphrase. That saves `feed.backup-<timestamp>.json` first, then starts a new file. Older scrambled copies can still exist in GitHub history.
 
 **Why does Forget ask twice?** So one stray tap does not sign you out. Cancel is the safe choice. Forget clears the passphrase from the browser's local storage on that device.
 

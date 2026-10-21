@@ -1,5 +1,7 @@
 {
   "v": 1,
+  "demo": "chief-sample",
+  "demoIds": ["gcgdoxx9u37y", "XgGi2P8I0Yxk", "u6miGUbq6GDF"],
   "salt": "HnK3mYxW621XsCRWaInK/Q==",
   "iter": 310000,
   "items": [

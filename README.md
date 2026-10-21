@@ -21,9 +21,9 @@ Nothing to install. The letters stay hidden. Click **Show** if you want to check
 ## Checklist
 
 - [ ] 1. Open the live demo above and type the demo passphrase. No install.
-- [ ] 2. Click **Use this template** (GitHub's button that copies this project into your account).
+- [ ] 2. Click **Use this template** or **Fork** (GitHub's button that copies this project into your account). Choose **Public**.
 - [ ] 3. Edit `config.js` with the pencil icon. You can skip the `YOUR_` lines until you want Send to work.
-- [ ] 4. Turn on GitHub Pages (the free switch that publishes your copy as a website): **Settings**, **Pages**, branch **main**, folder **/ (root)**.
+- [ ] 4. Turn on GitHub Pages (the free switch that publishes your copy as a website): **Settings**, **Pages**, **Deploy from a branch**, branch **main**, folder **/ (root)**.
 - [ ] 5. Open your new site address and type the demo passphrase. A red "not set up" line, if you tap Send, is expected.
 
 ## Make your own copy in the browser
@@ -33,7 +33,7 @@ You do not need a command line for this part.
 The **Use this template** button is turned on at go-live (**Settings**, **General**, **Template repository**). You do not change that checkbox. If you do not see the button yet, click **Fork** instead. Either one makes your own copy.
 
 1. Sign in to GitHub and open this project.
-2. Click **Use this template**, then **Create a new repository**. Pick a name you will remember.
+2. Click **Use this template** or **Fork**, then **Create a new repository**. Choose **Public**. Pick a name you will remember.
 3. In your new copy, click `config.js`, then the pencil (**Edit this file**). Change only the words inside the quotes. Click **Commit changes** and commit to the `main` branch.
 
 | Line | Name | What to put |
@@ -58,8 +58,8 @@ Open it and type the demo passphrase. You should see the sample reply and the bu
 
 Do this when you want your own reply on the site. The passphrase stays on your computer. It is never saved in the project.
 
-1. On your GitHub copy, click the green **Code** button, then **Download ZIP**. Unzip it. That folder is your project folder.
-2. Double-click `send-message.bat` (Windows) or `send-message.sh` (Mac or Linux). The first time, it builds a private toolbox folder named `.venv`. Type your passphrase (six or more random words, not the demo phrase). The letters stay hidden. Then type the message. The first time, type `yes` when it asks to start a new feed (the message file). That removes the sample.
+1. On your GitHub copy, click the green **Code** button, then **Download ZIP**. Unzip it. That folder is your project folder. This step needs Python from [python.org](https://www.python.org/downloads/).
+2. Double-click `send-message.bat` (Windows) or `send-message.sh` (Mac or Linux). The first time, it builds a private toolbox folder named `.venv`. Type your passphrase (six or more random words, not the demo phrase). The letters stay hidden. Then type the message. The first time, while the file is still the sample, type `START OVER` when it asks. That saves a backup, then replaces the sample.
 3. Back on GitHub, click **Add file**, then **Upload files**. Drop in the new `feed.json` only. Do not upload `.venv`. Commit it to `main`. Wait a minute, reload your site, and unlock with your passphrase. The demo passphrase stops working. That is expected.
 
 If the Mac or Linux file opens as text, open Terminal, type `cd ` with a space, drag the folder onto the window, press Enter, then run `./send-message.sh`.

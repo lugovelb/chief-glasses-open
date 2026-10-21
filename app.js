@@ -357,7 +357,8 @@
     if (atBottom || added) scrollEnd();
   }
   // Reply buttons are real buttons in the page, between the transcript and the
-  // message box. They are never moved into #scroll. ?replies=0 hides them.
+  // message box. They stay the same elements for the life of the page (hidden,
+  // never removed) so native focus order does not lose them. ?replies=0 hides them.
   function placeQuick(list) {
     const row = $('quick-replies');
     if (!row) return;
@@ -705,9 +706,32 @@
   $('forget-btn').addEventListener('click', askForget);
   $('confirm-cancel').addEventListener('click', () => cancelForget(false));
   $('confirm-forget').addEventListener('click', commitForget);
-  // Arrow keys are left to the glasses. Chromium spatial navigation (and Tab)
-  // move focus. A custom arrow walk would swallow those keys.
-  // Enter on a transcript bubble is not a native button activation.
+  // Meta Ray-Ban Display delivers touchpad and Neural Band input as keydown:
+  // ArrowUp, ArrowDown, ArrowLeft, ArrowRight, and Enter. Chromium moves focus
+  // by on-screen position. Enter activates the focused control, which fires click
+  // on a real button. This page does not take over those arrow keys.
+  // Left and Right inside the passphrase or message field move the text cursor.
+  // At either end of the text, spatial navigation would otherwise leave the field.
+  function nudgeCaret(el, dir, shift) {
+    const len = el.value.length;
+    let a = el.selectionStart;
+    let b = el.selectionEnd;
+    if (a == null || b == null) return;
+    const clamp = (n) => Math.max(0, Math.min(len, n));
+    if (!shift) {
+      const pos = a !== b ? (dir < 0 ? Math.min(a, b) : Math.max(a, b)) : clamp(a + dir);
+      el.setSelectionRange(pos, pos, 'none');
+      return;
+    }
+    const backward = el.selectionDirection === 'backward';
+    const edge = backward ? a : b;
+    const next = clamp(edge + dir);
+    if (backward) {
+      if (next > b) el.setSelectionRange(b, next, 'forward');
+      else el.setSelectionRange(next, b, 'backward');
+    } else if (next < a) el.setSelectionRange(next, a, 'backward');
+    else el.setSelectionRange(a, next, 'forward');
+  }
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') {
       if (!confirmOpen) return;
@@ -715,6 +739,16 @@
       cancelForget(false);
       return;
     }
+    if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
+      const field = document.activeElement;
+      if (field && (field.id === 'pass' || field.id === 'msg') && typeof field.selectionStart === 'number') {
+        ev.preventDefault();
+        nudgeCaret(field, ev.key === 'ArrowLeft' ? -1 : 1, ev.shiftKey);
+      }
+      return;
+    }
+    // A transcript row is not a native button. Enter activates it once.
+    // Real buttons, including the quick replies, keep the browser's own Enter.
     if (ev.key !== 'Enter' || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
     const el = document.activeElement;
     if (!el || !el.classList || !el.classList.contains('msg')) return;
