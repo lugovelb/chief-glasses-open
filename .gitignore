@@ -12,6 +12,7 @@ feed.private.json
 feed.real.json
 feed.json.tmp
 feed.json.bak
+feed.backup-*.json
 *.plaintext.json
 
 # Python

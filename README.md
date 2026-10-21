@@ -21,7 +21,7 @@ Nothing to install. The letters stay hidden. Click **Show** if you want to check
 ## Checklist
 
 - [ ] 1. Open the live demo above and type the demo passphrase. No install.
-- [ ] 2. Click **Use this template** or **Fork** (GitHub's button that copies this project into your account). Choose **Public**.
+- [ ] 2. Click **Use this template**, then **Create a new repository**, and choose **Public**. If that button is missing, click **Fork**, then **Create fork**.
 - [ ] 3. Edit `config.js` with the pencil icon. You can skip the `YOUR_` lines until you want Send to work.
 - [ ] 4. Turn on GitHub Pages (the free switch that publishes your copy as a website): **Settings**, **Pages**, **Deploy from a branch**, branch **main**, folder **/ (root)**.
 - [ ] 5. Open your new site address and type the demo passphrase. A red "not set up" line, if you tap Send, is expected.
@@ -30,10 +30,10 @@ Nothing to install. The letters stay hidden. Click **Show** if you want to check
 
 You do not need a command line for this part.
 
-The **Use this template** button is turned on at go-live (**Settings**, **General**, **Template repository**). You do not change that checkbox. If you do not see the button yet, click **Fork** instead. Either one makes your own copy.
+The **Use this template** button is turned on at go-live (**Settings**, **General**, **Template repository**). You do not change that checkbox. If you do not see the button yet, use **Fork** instead. Either one makes your own copy.
 
 1. Sign in to GitHub and open this project.
-2. Click **Use this template** or **Fork**, then **Create a new repository**. Choose **Public**. Pick a name you will remember.
+2. Click **Use this template**, then **Create a new repository**. Choose **Public**. If that button is missing, click **Fork**, then **Create fork**. Pick a name you will remember.
 3. In your new copy, click `config.js`, then the pencil (**Edit this file**). Change only the words inside the quotes. Click **Commit changes** and commit to the `main` branch.
 
 | Line | Name | What to put |
