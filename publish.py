@@ -27,7 +27,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+try:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+except ImportError:
+    print(
+        "The send script needs an extra Python piece named cryptography. "
+        "Double-click send-message again, or run: python -m pip install -r requirements.txt",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 
 ITERATIONS = 310_000
 SALT_LEN = 16
@@ -69,22 +77,27 @@ def passphrase_from_env() -> str:
 
 
 def is_shipped_demo(data: dict | None) -> bool:
-    """True only for the untouched sample file that shipped with Chief."""
-    if not isinstance(data, dict):
+    """True while the sample messages are still in this file.
+
+    Appending one reply keeps the same salt and the original messages, so
+    START OVER stays available. A fresh feed from --new uses a new salt.
+    """
+    if not isinstance(data, dict) or data.get("salt") != DEMO_SALT:
         return False
-    if data.get("demo") != DEMO_MARKER or data.get("demoIds") != DEMO_IDS:
+    # A publish that only appends drops these. A different marker means this
+    # is no longer the sample.
+    if data.get("demo") not in (None, DEMO_MARKER):
         return False
-    if data.get("salt") != DEMO_SALT:
+    if data.get("demoIds") not in (None, DEMO_IDS):
         return False
     items = data.get("items")
-    if not isinstance(items, list) or len(items) != len(DEMO_CTS):
+    if not isinstance(items, list):
         return False
-    cts = []
+    cts: set[str] = set()
     for item in items:
-        if not isinstance(item, dict) or not isinstance(item.get("ct"), str):
-            return False
-        cts.append(item["ct"])
-    return set(cts) == DEMO_CTS
+        if isinstance(item, dict) and isinstance(item.get("ct"), str):
+            cts.add(item["ct"])
+    return DEMO_CTS.issubset(cts)
 
 
 def backup_feed(path: Path) -> Path:
