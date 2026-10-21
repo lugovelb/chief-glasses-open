@@ -1,0 +1,26 @@
+# Passphrases and local secrets. Never commit these.
+.env
+.env.*
+*.env
+.passphrase
+passphrase.txt
+secrets/
+
+# Private feed copies. feed.json in this folder is the public demo ciphertext.
+feed.local.json
+feed.private.json
+feed.real.json
+feed.json.tmp
+feed.json.bak
+*.plaintext.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor and OS
+.DS_Store
+*.log
+node_modules/
