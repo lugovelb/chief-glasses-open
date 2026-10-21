@@ -2,7 +2,7 @@
    Edit only the values inside the quotes. Leave the names on the left alone.
    The demo works before you change anything.
    Replace the three YOUR_... values before sending messages from the glasses.
-   Steps: README.md → Quick start → step 2. */
+   Steps: README.md, the checklist, then "Edit the settings in the browser". */
 window.CHIEF_CONFIG = {
   // Paste the access key from https://web3forms.com
   // A long id with dashes. Anyone with it can email your inbox.
@@ -21,8 +21,8 @@ window.CHIEF_CONFIG = {
   // Leave this unless you run your own ntfy server.
   ntfyServer: "https://ntfy.sh",
 
-  // Leave this. It loads the feed.json file next to the app.
-  feedUrl: "feed.json",
+  // Leave this. ./feed.json is the file next to the page (GitHub Pages too).
+  feedUrl: "./feed.json",
 
   // Leave the empty quotes unless new replies are slow to appear.
   // Then use your own repository names, for example:

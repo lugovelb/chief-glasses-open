@@ -49,7 +49,26 @@
   }
 
   const assistantName = usable(CFG.assistantName) || 'Chief';
-  const feedUrl = safeHttp(CFG.feedUrl, 'feed.json');
+  // ./feed.json lives next to this page. A GitHub Pages project address can be
+  // https://name.github.io/repo with or without a trailing slash, or index.html.
+  // Resolve against that folder so the demo feed loads either way.
+  function pageFolder() {
+    const url = new URL(location.href);
+    const last = url.pathname.split('/').pop() || '';
+    if (!url.pathname.endsWith('/')) {
+      if (/\.[a-z0-9]+$/i.test(last)) url.pathname = url.pathname.replace(/[^/]*$/, '');
+      else url.pathname += '/';
+    }
+    url.search = '';
+    url.hash = '';
+    return url.href;
+  }
+  function resolveFeedUrl(value) {
+    const raw = safeHttp(value, './feed.json') || './feed.json';
+    try { return new URL(raw, pageFolder()).href; }
+    catch { return raw; }
+  }
+  const feedUrl = resolveFeedUrl(CFG.feedUrl);
   const apiFeedUrl = safeApi(CFG.apiFeedUrl);
   const formsubmitId = usable(CFG.formsubmitId);
   const RELAY = formsubmitId ? 'https://formsubmit.co/ajax/' + encodeURIComponent(formsubmitId) : '';
@@ -311,6 +330,17 @@
       if (n.sig !== sig) {
         n.li.className = 'msg ' + m.role + (m.state ? ' pending ' + m.state : '');
         if (m.state) n.li.dataset.id = m.id; else delete n.li.dataset.id;
+        // A failed send is retried by activating the row. The row is not a button,
+        // so it needs tabindex to join D-pad focus.
+        if (m.state === 'failed') {
+          n.li.tabIndex = 0;
+          n.li.classList.add('focusable');
+          n.li.setAttribute('role', 'button');
+        } else {
+          n.li.removeAttribute('tabindex');
+          n.li.classList.remove('focusable');
+          if (n.li.getAttribute('role') === 'button') n.li.removeAttribute('role');
+        }
         n.li.firstChild.textContent = label;
         n.li.lastChild.textContent = m.text;
         n.sig = sig;
@@ -344,14 +374,12 @@
       for (const label of QUICK) {
         const b = document.createElement('button');
         b.type = 'button';
+        b.className = 'focusable';
         b.textContent = label;
         b.dataset.text = label;
+        b.addEventListener('click', () => send(b.dataset.text));
         el.append(b);
       }
-      el.addEventListener('click', (ev) => {
-        const b = ev.target.closest('button');
-        if (b && el.contains(b)) send(b.dataset.text);
-      });
     }
     if (host.li.nextSibling !== el) host.li.after(el);
   }
@@ -538,7 +566,7 @@
     const text = (fromField ? input.value : preset).trim();
     if (!text) { setStatus('err', 'Type or speak a message first.'); input.focus(); return; }
     if (!emailConfigured() && !BACKUP) {
-      setStatus('err', 'Sending is not set up. In config.js, replace YOUR_WEB3FORMS_KEY on the web3formsKey line.');
+      setStatus('err', 'Sending is not set up. For email, set config.js line 9 (web3formsKey) or line 14 (formsubmitId). For ntfy, set line 19 (ntfyTopic).');
       return;
     }
     if (!keyRec || !feedSalt) { setStatus('err', 'Not ready yet. Tap Refresh, then try again.'); return; }
@@ -592,15 +620,36 @@
     saveOutbox();
     render();
     if (!es) refresh();   // a live channel's onopen does its own catch-up
+    if (unlocked()) focusPrimary();
+  }
+  // Put the highlight on the first quick reply so a swipe can reach it.
+  // The message field is the next stop down.
+  function focusPrimary() {
+    if ($('feed').hidden) return;
+    const quick = document.querySelector('#quick-replies button.focusable');
+    const el = quick || $('msg');
+    if (!el) return;
+    el.focus();
+    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* ignore */ }
   }
 
   // ---------- events ----------
+  $('pass-toggle').addEventListener('click', () => {
+    const input = $('pass');
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    input.classList.toggle('secret', !show);
+    const btn = $('pass-toggle');
+    btn.textContent = show ? 'Hide' : 'Show';
+    btn.setAttribute('aria-pressed', String(show));
+    btn.setAttribute('aria-label', show ? 'Hide passphrase' : 'Show passphrase');
+  });
   $('unlock-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const v = $('pass').value.trim();
     if (!v) { $('lock-status').textContent = 'Enter your passphrase.'; return; }
     $('lock-status').textContent = 'Unlocking…';
-    if (await unlock(v)) { $('pass').value = ''; $('msg').focus(); }
+    if (await unlock(v)) { $('pass').value = ''; focusPrimary(); }
   });
   $('compose').addEventListener('submit', (ev) => { ev.preventDefault(); send(); });
   $('convo').addEventListener('click', (ev) => {
@@ -654,10 +703,48 @@
   $('forget-btn').addEventListener('click', askForget);
   $('confirm-cancel').addEventListener('click', () => cancelForget(false));
   $('confirm-forget').addEventListener('click', commitForget);
+  // Glasses D-pad: arrow keys move focus, Enter activates the focused control.
+  // Quick replies live in the scrolling transcript, which the built-in spatial
+  // walk can skip, so focus moves in DOM order and the chosen control scrolls into view.
+  function focusableList() {
+    return [...document.querySelectorAll('.focusable')].filter((el) => {
+      if (el.disabled) return false;
+      if (el.closest('[hidden], [inert]')) return false;
+      return true;
+    });
+  }
+  function moveFocus(dir) {
+    const list = focusableList();
+    if (!list.length) return;
+    const idx = list.indexOf(document.activeElement);
+    const prev = dir === 'up' || dir === 'left';
+    const next = idx === -1
+      ? (prev ? list.length - 1 : 0)
+      : (prev ? (idx - 1 + list.length) % list.length : (idx + 1) % list.length);
+    const el = list[next];
+    el.focus();
+    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* ignore */ }
+  }
   document.addEventListener('keydown', (ev) => {
-    if (!confirmOpen || ev.key !== 'Escape') return;
+    if (ev.key === 'Escape') {
+      if (!confirmOpen) return;
+      ev.preventDefault();
+      cancelForget(false);
+      return;
+    }
+    const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[ev.key];
+    if (dir && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
+      ev.preventDefault();
+      moveFocus(dir);
+      return;
+    }
+    // Enter activates the focused control once. Inputs keep their normal submit behavior.
+    if (ev.key !== 'Enter') return;
+    const el = document.activeElement;
+    if (!el || !el.classList || !el.classList.contains('focusable')) return;
+    if (el.matches('input, textarea')) return;
     ev.preventDefault();
-    cancelForget(false);
+    el.click();
   });
   window.addEventListener('popstate', () => { if (confirmOpen) cancelForget(true); });
   // Any interaction wakes the app (cheap no-op when already awake: just re-arms one timeout).

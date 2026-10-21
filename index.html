@@ -13,9 +13,9 @@
   <link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=1">
-  <script defer src="config.js?v=1"></script>
-  <script defer src="app.js?v=1"></script>
+  <link rel="stylesheet" href="style.css?v=3">
+  <script defer src="config.js?v=3"></script>
+  <script defer src="app.js?v=3"></script>
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -23,8 +23,11 @@
       <h1 class="brand"><img src="logo-64.png" alt="" class="logo" width="32" height="32"> Chief</h1>
       <form id="unlock-form" class="unlock" autocomplete="off">
         <label for="pass">Passphrase</label>
-        <input id="pass" type="text" class="secret" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Write or speak passphrase">
-        <button type="submit" id="unlock-btn">Unlock</button>
+        <div class="pass-row">
+          <input id="pass" type="password" class="secret focusable" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Write or speak passphrase">
+          <button type="button" id="pass-toggle" class="quiet focusable" aria-pressed="false" aria-label="Show passphrase">Show</button>
+        </div>
+        <button type="submit" id="unlock-btn" class="focusable">Unlock</button>
       </form>
       <p id="lock-status" class="status" role="status" aria-live="polite"></p>
     </section>
@@ -34,31 +37,31 @@
         <span class="brand small"><img src="logo-64.png" alt="" class="logo" width="32" height="32"> Chief</span>
         <span id="checked" class="checked" aria-live="polite"></span>
       </header>
-      <button type="button" id="banner" class="banner" role="alert" hidden>New reply</button>
+      <button type="button" id="banner" class="banner focusable" role="alert" hidden>New reply</button>
       <p id="error" class="error" role="alert" hidden></p>
       <div id="scroll" class="scroll">
         <p id="empty" class="empty">No messages yet.</p>
         <ol id="convo" class="convo" aria-live="polite"></ol>
       </div>
       <form id="compose" class="compose" autocomplete="off">
-        <input id="msg" type="text" enterkeyhint="send" autocomplete="off" maxlength="2000" placeholder="Message" aria-label="Message">
-        <button type="submit" id="send-btn" class="send">Send</button>
+        <input id="msg" type="text" class="focusable" enterkeyhint="send" autocomplete="off" maxlength="2000" placeholder="Message" aria-label="Message">
+        <button type="submit" id="send-btn" class="send focusable">Send</button>
       </form>
       <p id="send-status" class="send-status" role="status" aria-live="polite"></p>
       <nav class="controls" aria-label="Controls">
-        <button type="button" id="read-btn">Read aloud</button>
-        <button type="button" id="refresh-btn">Refresh</button>
-        <button type="button" id="auto-btn" aria-pressed="true">Auto-read: On</button>
-        <button type="button" id="saver-btn" aria-pressed="true" aria-label="Battery saver">Saver: On</button>
-        <button type="button" id="forget-btn" class="quiet" aria-label="Forget passphrase">Forget</button>
+        <button type="button" id="read-btn" class="focusable">Read aloud</button>
+        <button type="button" id="refresh-btn" class="focusable">Refresh</button>
+        <button type="button" id="auto-btn" class="focusable" aria-pressed="true">Auto-read: On</button>
+        <button type="button" id="saver-btn" class="focusable" aria-pressed="true" aria-label="Battery saver">Saver: On</button>
+        <button type="button" id="forget-btn" class="quiet focusable" aria-label="Forget passphrase">Forget</button>
       </nav>
     </section>
 
     <div id="confirm" class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text" hidden>
       <p id="confirm-text">Forget key? This signs you out of Chief.</p>
       <div class="confirm-actions">
-        <button type="button" id="confirm-cancel" class="choice">Cancel</button>
-        <button type="button" id="confirm-forget" class="quiet">Forget</button>
+        <button type="button" id="confirm-cancel" class="choice focusable">Cancel</button>
+        <button type="button" id="confirm-forget" class="quiet focusable">Forget</button>
       </div>
     </div>
   </div>

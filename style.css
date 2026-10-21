@@ -14,6 +14,9 @@ body.new .app-shell { border-color: #c9a250; }   /* new reply: one static border
 .brand.small { font-size: 1.05em; margin: 0; }
 .logo { inline-size: 1.2em; block-size: 1.2em; opacity: 0.85; }
 .unlock { display: flex; flex-direction: column; gap: 0.6em; }
+.pass-row { display: flex; gap: 0.35em; align-items: stretch; }
+.pass-row input { flex: 1 1 auto; }
+.pass-row button { flex: 0 0 auto; min-inline-size: 4.4em; }
 label { font-size: 1.1em; font-weight: 600; }
 input {
   font: inherit; font-size: 1.1em; color: #e8e8e8; background: #000; border: 2px solid #6a6a6a;
@@ -28,7 +31,11 @@ button {
 button:disabled { opacity: 0.45; }
 button.quiet { color: #a8a8a8; border-color: #4a4a4a; font-weight: 500; }
 button:active { border-color: #d8d8d8; }
-:where(button, a, input):focus-visible { outline: 3px solid #6cc7e0; outline-offset: 2px; }
+/* D-pad focus must be visible. The glasses move focus with arrow keys, not a cursor. */
+:where(button, input, .focusable):focus {
+  outline: 3px solid #6cc7e0;
+  outline-offset: 2px;
+}
 .status { margin-top: 0.8em; color: #e0bf7a; }
 .feed { display: flex; flex-direction: column; gap: 0.3em; }
 .feed > * { flex: 0 0 auto; }
@@ -77,4 +84,4 @@ button:active { border-color: #d8d8d8; }
 .confirm-actions { display: flex; gap: 0.45em; }
 .confirm-actions button { flex: 1 1 0; min-block-size: 3.2em; font-size: 1.15em; }
 .confirm .choice { color: #6cc7e0; border-color: #6cc7e0; border-width: 3px; }
-.confirm button:focus { outline: 3px solid #6cc7e0; outline-offset: 2px; }
+.confirm .focusable:focus { outline: 3px solid #6cc7e0; outline-offset: 2px; }
