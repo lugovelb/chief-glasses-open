@@ -215,7 +215,7 @@ def publish(text: str, path: Path, new: bool, role: str, keep: int) -> int:
 
 def read_line(prompt: str) -> str:
     print(prompt, end="", file=sys.stderr, flush=True)
-    return sys.stdin.readline()
+    return sys.stdin.readline().rstrip("\r\n")
 
 
 def read_secret(prompt: str) -> str:
