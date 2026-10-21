@@ -7,7 +7,6 @@
   const LS_SEEN_IDS = 'chief.seenIds', LS_SEEN_T = 'chief.seenT';
   const QS = new URLSearchParams(location.search);
   const showQuick = QS.get('replies') !== '0';   // on in the normal app; ?replies=0 hides them
-  const QUICK = ['Yes', 'No', 'Later', 'Tell me more'];
   // Battery: the live channel (SSE) is the only network activity while healthy. The feed is polled only
   // while that channel is down, with backoff. Everything stops when hidden or idle.
   const BACKOFF_MS = [5000, 10000, 20000, 60000];
@@ -264,6 +263,10 @@
     if (!saver) { try { if (navigator.vibrate) navigator.vibrate(60); } catch { /* ignore */ } }
     if (auto) speak(assistantName + ' says: ' + text);
     scrollEnd();
+    // A new message puts the highlight back on its reply row, unless the wearer
+    // is typing or confirming Forget.
+    const typing = document.activeElement && document.activeElement.matches && document.activeElement.matches('input, textarea');
+    if (!confirmOpen && !typing) focusReplyRow();
   }
 
   // ---------- state ----------
@@ -330,58 +333,46 @@
       if (n.sig !== sig) {
         n.li.className = 'msg ' + m.role + (m.state ? ' pending ' + m.state : '');
         if (m.state) n.li.dataset.id = m.id; else delete n.li.dataset.id;
-        // A failed send is retried by activating the row. The row is not a button,
-        // so it needs tabindex to join D-pad focus.
-        if (m.state === 'failed') {
-          n.li.tabIndex = 0;
-          n.li.classList.add('focusable');
-          n.li.setAttribute('role', 'button');
-        } else {
-          n.li.removeAttribute('tabindex');
-          n.li.classList.remove('focusable');
-          if (n.li.getAttribute('role') === 'button') n.li.removeAttribute('role');
-        }
         n.li.firstChild.textContent = label;
         n.li.lastChild.textContent = m.text;
         n.sig = sig;
       }
-      let want = prev ? prev.nextSibling : ol.firstChild;
-      while (want && want.id === 'quick-replies') want = want.nextSibling;
+      // A bubble can take the highlight (a new message does). Select on it
+      // jumps to the reply buttons, which live outside this scroller.
+      n.li.tabIndex = 0;
+      n.li.classList.add('focusable');
+      n.li.setAttribute('role', 'button');
+      n.li.setAttribute('aria-label', m.state === 'failed' ? 'Retry sending' : 'Show quick replies');
+      const want = prev ? prev.nextSibling : ol.firstChild;
       if (want !== n.li) ol.insertBefore(n.li, want);
       prev = n.li;
     }
     for (const [key, n] of nodes) if (!keep.has(key)) { n.li.remove(); nodes.delete(key); }
+    let latestKey = null;
+    for (const m of list) if (m.role === 'chief') latestKey = m.id ? 'i:' + m.id : 'c:' + m.ct;
+    for (const [key, n] of nodes) n.li.classList.toggle('latest', key === latestKey);
     placeQuick(list);
     $('empty').hidden = list.length > 0;
     $('read-btn').disabled = !latestChief();
     if (atBottom || added) scrollEnd();
   }
-  // Quick replies sit under the newest assistant bubble and send that text. ?replies=0 hides them.
+  // Reply buttons are real buttons in the page, between the transcript and the
+  // message box. They are never moved into #scroll. ?replies=0 hides them.
   function placeQuick(list) {
     const row = $('quick-replies');
-    if (!showQuick) { if (row) row.remove(); return; }
-    let chiefKey = null;
-    for (const m of list) if (m.role === 'chief') chiefKey = m.id ? 'i:' + m.id : 'c:' + m.ct;
-    const host = chiefKey && nodes.get(chiefKey);
-    if (!host) { if (row) row.remove(); return; }
-    let el = row;
-    if (!el) {
-      el = document.createElement('li');
-      el.id = 'quick-replies';
-      el.className = 'quick-replies';
-      el.setAttribute('role', 'group');
-      el.setAttribute('aria-label', 'Quick replies');
-      for (const label of QUICK) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'focusable';
-        b.textContent = label;
-        b.dataset.text = label;
-        b.addEventListener('click', () => send(b.dataset.text));
-        el.append(b);
-      }
-    }
-    if (host.li.nextSibling !== el) host.li.after(el);
+    if (!row) return;
+    const show = showQuick && list.some((m) => m.role === 'chief');
+    row.hidden = !show;
+  }
+  // Highlight the first quick reply and scroll it into view. Returns false when
+  // replies are hidden or not on screen yet.
+  function focusReplyRow() {
+    const row = $('quick-replies');
+    if (!row || row.hidden) return false;
+    const el = row.querySelector('button:not([disabled])');
+    if (!el) return false;
+    el.focus();
+    return document.activeElement === el;
   }
 
   // Apply a feed (raw JSON text). Decrypts only when the text changed.
@@ -626,8 +617,8 @@
   // The message field is the next stop down.
   function focusPrimary() {
     if ($('feed').hidden) return;
-    const quick = document.querySelector('#quick-replies button.focusable');
-    const el = quick || $('msg');
+    if (focusReplyRow()) return;
+    const el = $('msg');
     if (!el) return;
     el.focus();
     try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* ignore */ }
@@ -652,10 +643,21 @@
     if (await unlock(v)) { $('pass').value = ''; focusPrimary(); }
   });
   $('compose').addEventListener('submit', (ev) => { ev.preventDefault(); send(); });
+  $('quick-replies').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (b && b.dataset.text) send(b.dataset.text);
+  });
   $('convo').addEventListener('click', (ev) => {
-    const li = ev.target.closest('li.failed');
-    const o = li && outbox.find((x) => x.id === li.dataset.id);
-    if (o) { setStatus('busy', 'Retrying in the background…'); startWaiting(); deliver(o); }
+    if (ev.target.closest('#quick-replies')) return;
+    const failed = ev.target.closest('li.failed');
+    if (failed) {
+      const o = outbox.find((x) => x.id === failed.dataset.id);
+      if (o) { setStatus('busy', 'Retrying in the background…'); startWaiting(); deliver(o); }
+      return;
+    }
+    // Select on a transcript bubble brings its reply row back, even after the
+    // highlight has moved on to Forget or another message.
+    if (ev.target.closest('li.msg')) focusReplyRow();
   });
   $('read-btn').addEventListener('click', () => { const m = latestChief(); if (m) speak(m.text); });
   $('refresh-btn').addEventListener('click', () => { setChecked('Checking…'); refresh(); });
@@ -703,28 +705,9 @@
   $('forget-btn').addEventListener('click', askForget);
   $('confirm-cancel').addEventListener('click', () => cancelForget(false));
   $('confirm-forget').addEventListener('click', commitForget);
-  // Glasses D-pad: arrow keys move focus, Enter activates the focused control.
-  // Quick replies live in the scrolling transcript, which the built-in spatial
-  // walk can skip, so focus moves in DOM order and the chosen control scrolls into view.
-  function focusableList() {
-    return [...document.querySelectorAll('.focusable')].filter((el) => {
-      if (el.disabled) return false;
-      if (el.closest('[hidden], [inert]')) return false;
-      return true;
-    });
-  }
-  function moveFocus(dir) {
-    const list = focusableList();
-    if (!list.length) return;
-    const idx = list.indexOf(document.activeElement);
-    const prev = dir === 'up' || dir === 'left';
-    const next = idx === -1
-      ? (prev ? list.length - 1 : 0)
-      : (prev ? (idx - 1 + list.length) % list.length : (idx + 1) % list.length);
-    const el = list[next];
-    el.focus();
-    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* ignore */ }
-  }
+  // Arrow keys are left to the glasses. Chromium spatial navigation (and Tab)
+  // move focus. A custom arrow walk would swallow those keys.
+  // Enter on a transcript bubble is not a native button activation.
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') {
       if (!confirmOpen) return;
@@ -732,17 +715,9 @@
       cancelForget(false);
       return;
     }
-    const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[ev.key];
-    if (dir && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
-      ev.preventDefault();
-      moveFocus(dir);
-      return;
-    }
-    // Enter activates the focused control once. Inputs keep their normal submit behavior.
-    if (ev.key !== 'Enter') return;
+    if (ev.key !== 'Enter' || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
     const el = document.activeElement;
-    if (!el || !el.classList || !el.classList.contains('focusable')) return;
-    if (el.matches('input, textarea')) return;
+    if (!el || !el.classList || !el.classList.contains('msg')) return;
     ev.preventDefault();
     el.click();
   });

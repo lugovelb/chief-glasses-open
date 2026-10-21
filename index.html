@@ -13,9 +13,9 @@
   <link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
   <script defer src="config.js?v=3"></script>
-  <script defer src="app.js?v=3"></script>
+  <script defer src="app.js?v=5"></script>
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -42,6 +42,13 @@
       <div id="scroll" class="scroll">
         <p id="empty" class="empty">No messages yet.</p>
         <ol id="convo" class="convo" aria-live="polite"></ol>
+      </div>
+      <!-- Outside the scrolling transcript so directional focus can leave and return. -->
+      <div id="quick-replies" class="quick-replies" role="group" aria-label="Quick replies">
+        <button type="button" data-text="Yes">Yes</button>
+        <button type="button" data-text="No">No</button>
+        <button type="button" data-text="Later">Later</button>
+        <button type="button" data-text="Tell me more">Tell me more</button>
       </div>
       <form id="compose" class="compose" autocomplete="off">
         <input id="msg" type="text" class="focusable" enterkeyhint="send" autocomplete="off" maxlength="2000" placeholder="Message" aria-label="Message">

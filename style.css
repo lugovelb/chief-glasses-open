@@ -55,11 +55,11 @@ button:active { border-color: #d8d8d8; }
 .msg.owner .time { color: #9fb2e6; text-align: end; }
 .msg .text { font-size: 1em; font-weight: 600; color: #dcdcdc; }
 .msg.owner .text { color: #c8d2f0; }
-.msg.chief:last-child .text,
-.msg.chief:has(+ .quick-replies) .text { font-size: 1.12em; color: #ececec; }
+.msg.chief.latest .text { font-size: 1.12em; color: #ececec; }
+/* Not a scroller. Directional focus walks onto these buttons from the message box and the controls. */
 .quick-replies {
   display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0; padding: 0;
-  align-self: stretch; max-inline-size: 100%; list-style: none;
+  align-self: stretch; max-inline-size: 100%; overflow: visible;
 }
 .quick-replies button {
   flex: 1 1 auto; white-space: nowrap; min-block-size: 2.8em;

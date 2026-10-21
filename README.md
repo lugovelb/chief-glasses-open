@@ -71,7 +71,7 @@ This uses Meta's developer preview. The taps change. Chief is not an official Me
 1. Turn on Developer Mode using only this section: [Enabling Developer Mode in the Meta AI app](https://wearables.developer.meta.com/docs/develop/webapps/setup/#enabling-developer-mode-in-the-meta-ai-app).
 2. Add the page by its address using only this section: [Load the Web App on your glasses](https://wearables.developer.meta.com/docs/develop/webapps/test/#load-the-web-app-on-your-glasses).
 3. Use the `https://` address from Pages. Do not use `http://` or `127.0.0.1`.
-4. On the glasses, open Chief and type your passphrase. Swipe moves the highlight between the reply buttons (Yes, No, Later, Tell me more). Pinch or Select sends the highlighted one.
+4. On the glasses, open Chief and type your passphrase. The reply buttons (Yes, No, Later, Tell me more) sit under the chat and above the message box. Swipe back to them from the message box, Send, or Forget. Pinch or Select sends the highlighted one. Select a message to jump back to Yes.
 
 ![The Yes button highlighted. Swipe moves to No, Later, and Tell me more.](docs/screenshots/quick-reply-focus.png)
 
