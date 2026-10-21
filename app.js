@@ -362,7 +362,7 @@
     const newest = latestChief();
     const latestKey = newest ? (newest.id ? 'i:' + newest.id : 'c:' + newest.ct) : null;
     for (const [key, n] of nodes) n.li.classList.toggle('latest', key === latestKey);
-    placeQuick(list);
+    placeQuick();
     $('empty').hidden = list.length > 0;
     $('read-btn').disabled = !latestChief();
     if (atBottom || added) scrollEnd();
@@ -370,10 +370,12 @@
   // Reply buttons are real buttons in the page, between the transcript and the
   // message box. They stay the same elements for the life of the page (hidden,
   // never removed) so native focus order does not lose them. ?replies=0 hides them.
-  function placeQuick(list) {
+  function placeQuick() {
     const row = $('quick-replies');
     if (!row) return;
-    const show = showQuick && list.some((m) => m.role === 'chief');
+    // The row stays up if any assistant message exists, even when that
+    // message has scrolled out of the last 20 shown.
+    const show = showQuick && messages.some((m) => m.role === 'chief');
     row.hidden = !show;
   }
   // Highlight the first quick reply and scroll it into view. Returns false when
