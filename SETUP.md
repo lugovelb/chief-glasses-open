@@ -119,7 +119,7 @@ git commit -m "Update the message feed"
 git push
 ```
 
-`--new` removes the sample after saving `feed.backup-<timestamp>.json`. Later replies use the same publish command **without** `--new`, then commit and push `feed.json` again. The script asks for the passphrase and does not print it. Do not commit the passphrase.
+`--new` removes the sample after saving `feed.backup-<timestamp>.json`. Later replies use the same publish command **without** `--new`, then commit and push `feed.json` again. Set `CHIEF_PASSPHRASE` with the `export` line above first. `publish.py` reads that and does not print it. Do not commit the passphrase.
 
 The file keeps the newest 20 messages.
 
