@@ -251,7 +251,7 @@ def interactive(path: Path, role: str, keep: int) -> int:
     if code != WRONG_PASSPHRASE:
         return code
     # A wrong passphrase on a real feed must not offer to delete it.
-    # Only the untouched shipped sample can be replaced, and only after START OVER.
+    # The sample can still be replaced after one added reply, and only after START OVER.
     if not is_shipped_demo(load_feed(path)):
         print("Your messages were not changed.", file=sys.stderr)
         return WRONG_PASSPHRASE
