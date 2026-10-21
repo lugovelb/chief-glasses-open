@@ -89,3 +89,9 @@ Quick replies are on unless you add `?replies=0` to the address.
 - Do not put your email address in `config.js`. Do not commit the passphrase.
 
 Command-line setup, local preview, troubleshooting, and the FAQ are in [SETUP.md](SETUP.md).
+
+## Support
+
+Chief is free. To support the work: https://paypal.me/lugovelb
+
+MIT license. See [LICENSE](LICENSE).
