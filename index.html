@@ -13,9 +13,9 @@
   <link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
   <script defer src="config.js?v=3"></script>
-  <script defer src="app.js?v=6"></script>
+  <script defer src="app.js?v=7"></script>
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -39,7 +39,7 @@
       </header>
       <button type="button" id="banner" class="banner focusable" role="alert" hidden>New reply</button>
       <p id="error" class="error" role="alert" hidden></p>
-      <div id="scroll" class="scroll">
+      <div id="scroll" class="scroll focusable" tabindex="0" role="region" aria-label="Messages">
         <p id="empty" class="empty">No messages yet.</p>
         <ol id="convo" class="convo" aria-live="polite"></ol>
       </div>

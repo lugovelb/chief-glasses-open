@@ -747,6 +747,23 @@
       }
       return;
     }
+    // The transcript sits above the reply buttons. While it has the highlight,
+    // Up and Down scroll it. Down at the bottom returns to the reply row.
+    if ((ev.key === 'ArrowUp' || ev.key === 'ArrowDown') && !ev.altKey && !ev.ctrlKey && !ev.metaKey && document.activeElement === $('scroll')) {
+      const sc = $('scroll');
+      const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
+      const step = Math.max(48, Math.round(sc.clientHeight * 0.8));
+      if (ev.key === 'ArrowDown' && sc.scrollTop >= max - 1) {
+        const row = $('quick-replies');
+        const next = row && !row.hidden && row.querySelector('button');
+        if (next) { ev.preventDefault(); next.focus(); }
+        return;
+      }
+      if (ev.key === 'ArrowUp' && sc.scrollTop <= 0) { ev.preventDefault(); return; }
+      ev.preventDefault();
+      sc.scrollTop = ev.key === 'ArrowUp' ? Math.max(0, sc.scrollTop - step) : Math.min(max, sc.scrollTop + step);
+      return;
+    }
     // A transcript row is not a native button. Enter activates it once.
     // Real buttons, including the quick replies, keep the browser's own Enter.
     if (ev.key !== 'Enter' || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;

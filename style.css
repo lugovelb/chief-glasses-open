@@ -45,6 +45,7 @@ button:active { border-color: #d8d8d8; }
 .error { margin: 0; padding: 0.25em 0.5em; color: #f0a0a0; border: 2px solid #b04a4a; border-radius: 0.4em; font-weight: 700; font-size: 0.85em; }
 .banner { inline-size: 100%; color: #e0bf7a; border-color: #c9a250; font-size: 1em; min-block-size: 1.9em; }
 .scroll { min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; padding-inline-end: 0.2em; }
+#scroll:focus { outline: 3px solid #6cc7e0; outline-offset: -3px; }
 .empty { color: #8a8a8a; margin: 0.3em 0; }
 .convo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35em; }
 .msg { max-inline-size: 88%; border-radius: 0.7em; padding: 0.3em 0.55em; white-space: pre-wrap; overflow-wrap: anywhere; border: 2px solid; }
