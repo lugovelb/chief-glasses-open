@@ -322,7 +322,8 @@
     const pend = outbox.filter((o) => outText.has(o.id)).map((o) => ({ t: o.t, text: outText.get(o.id), role: 'owner', id: o.id, state: o.state }));
     const time = (m) => Date.parse(m.t) || 0;
     const list = [...pend, ...messages].map((m, i) => [m, i])
-      .sort((a, b) => (time(b[0]) - time(a[0])) || ((a[0].role === 'owner') - (b[0].role === 'owner')) || (a[1] - b[1]))
+      // Newest time first. A tied time keeps feed order: the later entry is newer.
+      .sort((a, b) => (time(b[0]) - time(a[0])) || (b[1] - a[1]))
       .slice(0, MAX_SHOWN).map(([m]) => m).reverse();
     const sc = $('scroll'), ol = $('convo');
     const atBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40;
