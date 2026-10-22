@@ -1,4 +1,6 @@
-# Chief
+# Chief: Grok, ChatGPT, Claude, Gemini and Cursor on your Meta Ray-Ban Display glasses
+
+Tested with Grok Bot. Other AIs work if they can run the send script and upload to GitHub.
 
 Chief shows replies from your assistant on Meta Ray-Ban Display glasses, or in any web browser. The messages on the site are scrambled. Chief is not affiliated with Meta.
 
