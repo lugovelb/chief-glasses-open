@@ -12,6 +12,8 @@ orbit maple cinder velvet quartz lantern
 
 Nothing to install. The letters stay hidden. Click **Show** if you want to check what you typed.
 
+**Quest browser demo.** A one-minute clip of the same Chief web app in a Meta Quest headset (mixed reality, hand tracking): [watch the clip](https://github.com/lugovelb/chief-glasses-open/releases/download/demo-quest-2026-10-25/chief-demo-clip-2026-10-25.mp4). This is a browser demo, not Meta Ray-Ban Display lens footage. [Release page](https://github.com/lugovelb/chief-glasses-open/releases/tag/demo-quest-2026-10-25).
+
 ## What it looks like
 
 ![Unlock screen. The passphrase is hidden, with a Show button.](docs/screenshots/unlock.png)
