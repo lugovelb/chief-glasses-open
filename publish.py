@@ -13,6 +13,14 @@ Setup (once), from this folder:
 After the first message, add another with:
 
     python3 publish.py "The next reply"
+
+A drafted email (the glasses show To, Subject, and the body, and ignore text):
+
+    python3 publish.py --draft-id emily-1 --to Emily --subject "Tuesday" --body "Hi Emily."
+
+Print the draftHash the glasses expect for those three fields:
+
+    python3 publish.py --draft-hash --to Emily --subject "Tuesday" --body "Hi Emily."
 """
 
 from __future__ import annotations
@@ -127,10 +135,32 @@ def derive_key(passphrase: str, salt: bytes, iterations: int) -> bytes:
     )
 
 
-def encrypt_item(key: bytes, text: str, role: str) -> dict:
+def draft_canonical(to: str, subject: str, body: str) -> bytes:
+    """Length-prefixed to, subject, body.
+
+    Each field is its UTF-8 byte length in decimal ASCII, a newline byte
+    (0x0A), then the field's UTF-8 bytes. The three pieces are concatenated.
+    SHA-256 of those bytes, lowercase hex, first 12 characters, is the draftHash.
+    """
+
+    def piece(value: str) -> bytes:
+        raw = ("" if value is None else str(value)).encode("utf-8")
+        return str(len(raw)).encode("ascii") + b"\n" + raw
+
+    return piece(to) + piece(subject) + piece(body)
+
+
+def draft_hash(to: str, subject: str, body: str) -> str:
+    return hashlib.sha256(draft_canonical(to, subject, body)).hexdigest()[:12]
+
+
+def encrypt_item(key: bytes, text: str, role: str, extra: dict | None = None) -> dict:
     iv = os.urandom(IV_LEN)
+    payload_obj = {"t": stamp(), "text": text, "role": role, "id": new_id()}
+    if extra:
+        payload_obj.update(extra)
     payload = json.dumps(
-        {"t": stamp(), "text": text, "role": role, "id": new_id()},
+        payload_obj,
         ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8")
@@ -183,7 +213,7 @@ def read_message(args: argparse.Namespace) -> str:
     return text
 
 
-def publish(text: str, path: Path, new: bool, role: str, keep: int) -> int:
+def publish(text: str, path: Path, new: bool, role: str, keep: int, extra: dict | None = None) -> int:
     passphrase = passphrase_from_env()
     existing = None if new else load_feed(path)
 
@@ -215,7 +245,7 @@ def publish(text: str, path: Path, new: bool, role: str, keep: int) -> int:
         print(f"Saved a backup as {saved.name}.")
 
     key = derive_key(passphrase, salt, iterations)
-    items.append(encrypt_item(key, text, role))
+    items.append(encrypt_item(key, text, role, extra))
     items = items[-keep:]
     write_feed(path, build_feed(salt, iterations, items))
 
@@ -274,6 +304,11 @@ def main() -> None:
     parser.add_argument("--keep", type=int, default=20, help="How many messages to keep (default: 20).")
     parser.add_argument("--demo-feed", action="store_true", help="Exit 0 when the feed is still the shipped sample.")
     parser.add_argument("--interactive", action="store_true", help="Ask for a passphrase and a message.")
+    parser.add_argument("--draft-id", default="", help="Publish a draft email with this id instead of a chat line.")
+    parser.add_argument("--to", default="", help="Draft To line. Used with --draft-id.")
+    parser.add_argument("--subject", default="", help="Draft Subject line. Used with --draft-id.")
+    parser.add_argument("--body", default="", help="Draft body. Used with --draft-id. The glasses show this, not the chat text.")
+    parser.add_argument("--draft-hash", action="store_true", help="Print the draftHash for --to, --subject, and --body, then exit.")
     args = parser.parse_args()
 
     if args.keep < 1:
@@ -281,13 +316,41 @@ def main() -> None:
         sys.exit(1)
 
     path = Path(args.feed)
+    if args.draft_hash:
+        print(draft_hash(args.to, args.subject, args.body))
+        sys.exit(0)
     if args.demo_feed:
         sys.exit(0 if is_shipped_demo(load_feed(path)) else 1)
     if args.interactive:
         sys.exit(interactive(path, args.role, args.keep))
 
-    text = read_message(args)
-    sys.exit(publish(text, path, args.new, args.role, args.keep))
+    extra = None
+    if args.draft_id or args.to or args.subject or args.body:
+        if not args.draft_id:
+            print("A draft needs --draft-id.", file=sys.stderr)
+            sys.exit(1)
+        if args.role != "chief":
+            print("A draft email is a reply, so leave --role as chief.", file=sys.stderr)
+            sys.exit(1)
+        extra = {
+            "kind": "draft",
+            "draftId": args.draft_id,
+            "to": args.to,
+            "subject": args.subject,
+            "body": args.body,
+            "draft": {
+                "id": args.draft_id,
+                "to": args.to,
+                "subject": args.subject,
+                "body": args.body,
+            },
+        }
+        text = args.message if args.message is not None else f"Draft: {args.subject}".strip()
+        if not text:
+            text = "Draft"
+    else:
+        text = read_message(args)
+    sys.exit(publish(text, path, args.new, args.role, args.keep, extra))
 
 
 if __name__ == "__main__":
