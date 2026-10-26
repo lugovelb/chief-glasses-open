@@ -4,6 +4,8 @@ Tested with Grok Bot. Other AIs work if they can run the send script and upload 
 
 Chief shows replies from your assistant on Meta Ray-Ban Display glasses, or in any web browser. The messages on the site are scrambled. Chief is not affiliated with Meta.
 
+This repository is the public template. Use **Use this template** or **Fork** to make your own copy. It does not ship a private host, a personal feed, or anyone else's keys.
+
 **Try it in 30 seconds.** Open the live demo: https://lugovelb.github.io/chief-glasses-open/ and type this passphrase (a secret phrase; this sample one is public):
 
 ```text
@@ -21,6 +23,12 @@ Nothing to install. The letters stay hidden. Click **Show** if you want to check
 ![A sample reply with Yes, No, Later, and Tell me more.](docs/screenshots/messages.png)
 
 ![Forget asks again. Cancel is the highlighted choice.](docs/screenshots/forget.png)
+
+![A drafted email with To, Subject, body, and a green Send under that draft.](docs/screenshots/draft.png)
+
+![After that Send, the bubble says Approved and shows the draft id.](docs/screenshots/draft-approved.png)
+
+![About shows the version, what Chief is, the public template link, and Back.](docs/screenshots/about.png)
 
 ## Checklist
 
@@ -77,11 +85,46 @@ This uses Meta's developer preview. The taps change. Chief is not an official Me
 3. Use the `https://` address from Pages. Do not use `http://` or `127.0.0.1`.
 4. On the glasses, open Chief and type your passphrase. The reply buttons (Yes, No, Later, Tell me more) sit under the chat and above the message box. Swipe up into the chat to read older messages, then swipe down to the buttons. Swipe back to the buttons from the message box, Send, or Forget. Pinch or Select sends the highlighted one. Select a message to jump back to Yes.
 
+**About** is with **Read aloud**, **Refresh**, and **Auto-read**. **Forget passphrase** is on its own row under those. **Saver** is the quiet control in the header, next to the clock. **Back** on the About screen returns to the chat. The glasses' back control does the same.
+
+A drafted email is drawn with its real **To**, **Subject**, and body. One green **Send** sits under that draft only. The **Send** beside the message box is still how you talk to your assistant.
+
 ![The Yes button highlighted. Swipe moves to No, Later, and Tell me more.](docs/screenshots/quick-reply-focus.png)
 
 **Forget** asks a second time. **Cancel** is the highlighted choice. Confirming Forget removes the passphrase from this device only. Closing the page with the glasses' back control keeps the chat for next time.
 
 Quick replies are on unless you add `?replies=0` to the address.
+
+## Draft email
+
+When your assistant publishes a drafted email, the bubble shows **To**, **Subject**, and the body. Chief does not show the free-form `text` on that message, so the line on the glasses is the email you would approve.
+
+The green **Send** under the draft is the approval. It sends an owner message whose kind is `send_draft`, with that draft's `draftId` and `draftHash`. After it sends, your bubble says **Approved ✓** and the draft id.
+
+These do not approve a draft:
+
+- A normal chat message, including one you type in the message box
+- **Yes**, **No**, **Later**, or **Tell me more**
+- The words `SEND_DRAFT` with no `send_draft` kind
+
+The hash is the first 12 lowercase hex characters of SHA-256 over the length-prefixed fields, in order: To, Subject, body. Each field is its UTF-8 byte length, written in decimal, then a colon, then the field. A pipe sits between fields. The worked example is in [SETUP.md](SETUP.md).
+
+New words for the same draft id make a new hash. **Send** stays under that draft until a `send_draft` message carries the new hash. An older approval does not cover the new text.
+
+To put a draft in your own feed, from the project folder, with `CHIEF_PASSPHRASE` already set:
+
+```bash
+python publish.py --draft-id emily-ultrasound-2026-10-28 \
+  --to "Emily" \
+  --subject "Tuesday ultrasound" \
+  --body "Hi Emily, confirming Tuesday ultrasound at 1:00 PM."
+```
+
+The stored `text` is only a fallback for an older page. This page ignores it on a draft.
+
+## About
+
+**About** shows version **1.2**, dated **Oct 26 2026**, a one-line description of Chief, and the help link for this public template: https://github.com/lugovelb/chief-glasses-open. **Back** returns to the chat.
 
 ## Security
 

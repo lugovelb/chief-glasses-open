@@ -123,6 +123,62 @@ git push
 
 The file keeps the newest 20 messages.
 
+## Draft email
+
+A chief message is a drafted email when it has `"kind": "draft_email"` and a `draftId`. It also counts when `draftId`, `to`, `subject`, and `body` are all present. The glasses show those three fields. They do not show `text` for that message.
+
+An owner message approves that exact draft only when all of these are true:
+
+- `"kind"` is `send_draft`
+- `draftId` matches the draft
+- `draftHash` matches the hash of the current To, Subject, and body
+
+A chat line, **Yes**, and the string `SEND_DRAFT` are ordinary messages. They do not approve a draft. After a real approval, the glasses show a bubble that says **Approved ✓** and the draft id. If the same draft id comes back with different words, the hash changes and **Send** stays until the new hash is approved.
+
+`draftHash` is the first 12 lowercase hex characters of SHA-256. The hashed string is length-prefixed `to|subject|body`:
+
+```text
+{utf8ByteLength(to)}:{to}|{utf8ByteLength(subject)}:{subject}|{utf8ByteLength(body)}:{body}
+```
+
+Lengths are the number of UTF-8 bytes, written in decimal. The pipe characters are separators. Hash the UTF-8 bytes of that whole string.
+
+Example:
+
+```text
+To: Emily
+Subject: Tuesday ultrasound
+Body: Hi Emily, confirming Tuesday ultrasound at 1:00 PM.
+```
+
+```text
+5:Emily|18:Tuesday ultrasound|51:Hi Emily, confirming Tuesday ultrasound at 1:00 PM.
+```
+
+`draftHash` for that text is `7f4483e42712`. A trailing space would be a different hash. Check a value with:
+
+```bash
+python publish.py --draft-hash --to "Emily" --subject "Tuesday ultrasound" \
+  --body "Hi Emily, confirming Tuesday ultrasound at 1:00 PM."
+```
+
+Publish a draft into `feed.json` (set `CHIEF_PASSPHRASE` first, as in the command-line section above):
+
+```bash
+python publish.py --draft-id emily-ultrasound-2026-10-28 \
+  --to "Emily" \
+  --subject "Tuesday ultrasound" \
+  --body "Hi Emily, confirming Tuesday ultrasound at 1:00 PM."
+```
+
+The page's green **Send** under the draft writes the `send_draft` owner message. You do not type that by hand.
+
+## About
+
+**About** is in the bottom controls with **Read aloud**, **Refresh**, and **Auto-read**. **Forget passphrase** is on the next row. **Saver** is a quiet button in the header.
+
+About shows version 1.2, dated Oct 26 2026, what Chief is, and the help link for this public template: https://github.com/lugovelb/chief-glasses-open. **Back** returns to the chat. This repository is that public template.
+
 ## On the glasses
 
 Meta's developer preview changes. Follow the linked sections, not a copied menu path. Skip any section about AI coding tools.
@@ -169,7 +225,11 @@ Use your `https://` Pages address and the passphrase you publish with.
 
 **Why does Forget ask twice?** So one stray tap does not sign you out. Cancel is the safe choice. Forget clears the passphrase from the browser's local storage on that device.
 
-**How do I hide Yes / No / Later / Tell me more?** Add `?replies=0` to the address.
+**How do I hide Yes / No / Later / Tell me more?** Add `?replies=0` to the address. The green Send under a drafted email stays. That Send is the approval for that draft, not a chat reply.
+
+**What approves a drafted email?** Only an owner message with kind `send_draft`, the same `draftId`, and the `draftHash` of the current To, Subject, and body. See the Draft email section above. Typing Yes, or the words SEND_DRAFT, does not send the email.
+
+**Where is About?** With Read aloud, Refresh, and Auto-read. Forget passphrase is on its own row. Saver is in the header. Help and setup on that screen point at this public template: https://github.com/lugovelb/chief-glasses-open.
 
 **Is this an official Meta app?** No. Chief is not affiliated with Meta. It is your own web page. The glasses can show it in Meta's developer preview.
 

@@ -150,22 +150,86 @@
       try { pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(it.iv) }, key, b64ToBytes(it.ct)); }
       catch { throw new Error('decrypt'); }
       const m = JSON.parse(dec.decode(pt));
-      out.push({ t: m.t, text: String(m.text ?? ''), role: m.role === 'owner' ? 'owner' : 'chief', id: m.id || null, ct: it.ct });
+      const row = { t: m.t, text: String(m.text ?? ''), role: m.role === 'owner' ? 'owner' : 'chief', id: m.id || null, ct: it.ct };
+      // Drafts and approvals carry structured fields. Free-form text stays on the
+      // object but is not what the glasses show for those messages.
+      if (typeof m.kind === 'string') row.kind = m.kind;
+      if (typeof m.draftId === 'string') row.draftId = m.draftId;
+      if (typeof m.draftHash === 'string') row.draftHash = m.draftHash;
+      if (typeof m.to === 'string') row.to = m.to;
+      if (typeof m.subject === 'string') row.subject = m.subject;
+      if (typeof m.body === 'string') row.body = m.body;
+      out.push(row);
     }
     return out;
   }
-  async function encryptMessage(text, key, salt, iter) {
+  async function encryptMessage(text, key, salt, iter, extra) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const id = bytesToB64(crypto.getRandomValues(new Uint8Array(9))).replace(/[+/=]/g, 'x');
     const t = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify({ t, text, role: 'owner', id })));
+    const payload = { t, text, role: 'owner', id };
+    if (extra && extra.kind === 'send_draft') {
+      payload.kind = 'send_draft';
+      payload.draftId = String(extra.draftId || '');
+      payload.draftHash = String(extra.draftHash || '');
+    }
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(payload)));
     const env = { v: 1, salt, iter, iv: bytesToB64(iv), ct: bytesToB64(ct) };
     return { id, t, armored: BEGIN + '\n' + btoa(JSON.stringify(env)) + '\n' + END };
   }
   async function decryptArmored(armored, key) {
     const env = JSON.parse(atob(armored.slice(BEGIN.length, -END.length).trim()));
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(env.iv) }, key, b64ToBytes(env.ct));
-    return JSON.parse(dec.decode(pt)).text;
+    return JSON.parse(dec.decode(pt));
+  }
+
+  // A drafted email is kind draft_email, or any chief message that already has
+  // draftId plus To, Subject, and body. The free-form text is not shown.
+  function isDraft(m) {
+    if (!m || m.role === 'owner') return false;
+    if (typeof m.draftId !== 'string' || m.draftId.length === 0) return false;
+    if (m.kind === 'draft_email') return true;
+    return typeof m.to === 'string' && typeof m.subject === 'string' && typeof m.body === 'string';
+  }
+  function draftFields(m) {
+    return {
+      draftId: String(m.draftId),
+      to: typeof m.to === 'string' ? m.to : '',
+      subject: typeof m.subject === 'string' ? m.subject : '',
+      body: typeof m.body === 'string' ? m.body : '',
+    };
+  }
+  // draftHash = first 12 lowercase hex of SHA-256 over
+  //   utf8ByteLength(to) + ":" + to + "|"
+  //   utf8ByteLength(subject) + ":" + subject + "|"
+  //   utf8ByteLength(body) + ":" + body
+  // Lengths are UTF-8 byte counts, written in decimal. The pipe is the separator.
+  function draftCanonical(to, subject, body) {
+    const lp = (value) => {
+      const text = String(value ?? '');
+      return enc.encode(text).length + ':' + text;
+    };
+    return lp(to) + '|' + lp(subject) + '|' + lp(body);
+  }
+  function hexOf(buf) {
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  async function draftHash(to, subject, body) {
+    const dig = await crypto.subtle.digest('SHA-256', enc.encode(draftCanonical(to, subject, body)));
+    return hexOf(dig).slice(0, 12);
+  }
+  // Only kind send_draft with this draftId and this hash approves. Chat text does not.
+  function isSendDraft(m, draftId, hash) {
+    return !!m && m.kind === 'send_draft' && m.draftId === draftId && m.draftHash === hash;
+  }
+  function spoken(m) {
+    if (!m) return '';
+    if (isDraft(m)) {
+      const f = draftFields(m);
+      return 'To ' + f.to + '. Subject ' + f.subject + '. ' + f.body;
+    }
+    if (m.kind === 'send_draft') return 'Approved.';
+    return m.text || '';
   }
 
   // ---------- replay protection ----------
@@ -196,14 +260,14 @@
     store.set(LS_SEEN_IDS, JSON.stringify([...seenIds]));
     if (seenT) store.set(LS_SEEN_T, seenT);
   }
+  // Same message id later in the feed replaces the earlier copy, so a draft
+  // whose content changed is the one on screen.
   function uniqueById(list) {
-    const seen = new Set();
+    const index = new Map();
     const out = [];
     for (const m of list) {
-      if (m.id) {
-        if (seen.has(m.id)) continue;
-        seen.add(m.id);
-      }
+      if (m.id && index.has(m.id)) { out[index.get(m.id)] = m; continue; }
+      if (m.id) index.set(m.id, out.length);
       out.push(m);
     }
     return out;
@@ -266,7 +330,7 @@
     // A new message puts the highlight back on its reply row, unless the wearer
     // is typing or confirming Forget.
     const typing = document.activeElement && document.activeElement.matches && document.activeElement.matches('input, textarea');
-    if (!confirmOpen && !typing) focusReplyRow();
+    if (!confirmOpen && !aboutOpen && !typing) focusReplyRow();
   }
 
   // ---------- state ----------
@@ -275,6 +339,11 @@
   let live = [];                       // entries that arrived live but aren't in the fetched feed yet
   let outbox = getJSON(LS_OUT, []);    // [{id,t,armored,state}] wearer messages not yet in the feed
   const outText = new Map();           // id -> plaintext (memory only)
+  const outMeta = new Map();           // id -> {kind, draftId, draftHash} for approvals still in the outbox
+  const hashCache = new Map();         // canonical draft string -> 12 hex
+  let hashJob = null;
+  const rendered = new Map();          // bubble key -> message, for the draft Send button
+  let aboutOpen = false;
   let feedText = null, feedSalt = null, feedIter = 310000;
   let busy = false, waitUntil = 0;
   let auto = store.get(LS_AUTO) !== 'off';
@@ -285,9 +354,41 @@
   function showError(msg) { const e = $('error'); e.textContent = msg || ''; e.hidden = !msg; }
   function setStatus(kind, msg) { const s = $('send-status'); s.dataset.kind = kind || ''; s.textContent = msg || ''; }
   const setChecked = (msg) => { $('checked').textContent = msg; };
-  function showLock(msg) { sleep(); $('feed').hidden = true; $('lock').hidden = false; $('lock-status').textContent = msg || ''; }
+  function showLock(msg) {
+    sleep();
+    if (aboutOpen) {
+      aboutOpen = false;
+      $('about').hidden = true;
+      if (history.state && history.state.chief === 'about') history.back();
+    }
+    $('feed').hidden = true;
+    $('feed').inert = false;
+    $('lock').hidden = false;
+    $('lock-status').textContent = msg || '';
+  }
+  function openAbout() {
+    if (aboutOpen || confirmOpen || $('feed').hidden) return;
+    aboutOpen = true;
+    $('feed').hidden = true;
+    $('feed').inert = true;
+    $('about').hidden = false;
+    try { history.pushState({ chief: 'about' }, ''); } catch { /* ignore */ }
+    $('about-back').focus();
+  }
+  function closeAbout(fromPop) {
+    if (!aboutOpen) return;
+    aboutOpen = false;
+    $('about').hidden = true;
+    $('feed').inert = false;
+    // The feed was hidden while About was open. The lock screen is the other
+    // full-page view; if it is hidden, this session still belongs on the chat.
+    if ($('lock').hidden) $('feed').hidden = false;
+    if (!fromPop && history.state && history.state.chief === 'about') history.back();
+    if ($('lock').hidden) $('about-btn').focus();
+  }
   function showFeed() { $('lock').hidden = true; $('feed').hidden = false; }
-  const unlocked = () => !$('feed').hidden;
+  // About hides the feed, but the passphrase session is still open.
+  const unlocked = () => $('lock').hidden && (aboutOpen || !$('feed').hidden);
   function renderToggles() {
     const a = $('auto-btn'); a.textContent = 'Auto-read: ' + (auto ? 'On' : 'Off'); a.setAttribute('aria-pressed', String(auto));
     const v = $('saver-btn'); v.textContent = 'Saver: ' + (saver ? 'On' : 'Off'); v.setAttribute('aria-pressed', String(saver));
@@ -313,13 +414,50 @@
   // ---------- render: keyed diff, only changed bubbles touch the DOM ----------
   const MARK = { sending: ' · sending…', sent: ' · sent ✓', failed: ' · not sent, tap to retry' };
   const nodes = new Map();   // key -> {li, sig}
+  function draftApproved(draftId, hash) {
+    if (!hash) return false;
+    if (messages.some((m) => isSendDraft(m, draftId, hash))) return true;
+    for (const o of outbox) {
+      if (o.state === 'failed') continue;
+      if (isSendDraft(outMeta.get(o.id), draftId, hash)) return true;
+    }
+    return false;
+  }
+  function scheduleHashes(list) {
+    const missing = [];
+    for (const m of list) {
+      if (!isDraft(m)) continue;
+      const f = draftFields(m);
+      const c = draftCanonical(f.to, f.subject, f.body);
+      if (!hashCache.has(c) && !missing.includes(c)) missing.push(c);
+    }
+    if (!missing.length) return;
+    const run = async () => {
+      for (const c of missing) {
+        if (hashCache.has(c)) continue;
+        const dig = await crypto.subtle.digest('SHA-256', enc.encode(c));
+        hashCache.set(c, hexOf(dig).slice(0, 12));
+      }
+    };
+    hashJob = Promise.resolve(hashJob).then(run).then(() => { if (unlocked()) render(); });
+  }
   function render() {
     const ids = new Set(messages.map((m) => m.id).filter(Boolean));
     const owned = new Set(messages.filter((m) => m.role === 'owner').map((m) => m.text.trim()));
     const before = outbox.length;
-    outbox = outbox.filter((o) => !ids.has(o.id) && !(outText.has(o.id) && owned.has(outText.get(o.id).trim())));
+    outbox = outbox.filter((o) => {
+      if (ids.has(o.id)) { outMeta.delete(o.id); return false; }
+      const meta = outMeta.get(o.id);
+      // A chat bubble is replaced when the same words show up in the feed.
+      // A draft approval is replaced only by the same draftId and draftHash,
+      // so a second draft that also says Approved does not clear this one.
+      if (meta && meta.kind === 'send_draft') return !messages.some((m) => isSendDraft(m, meta.draftId, meta.draftHash));
+      return !(outText.has(o.id) && owned.has(outText.get(o.id).trim()));
+    });
     if (outbox.length !== before) saveOutbox();
-    const pend = outbox.filter((o) => outText.has(o.id)).map((o) => ({ t: o.t, text: outText.get(o.id), role: 'owner', id: o.id, state: o.state }));
+    const pend = outbox.filter((o) => outText.has(o.id)).map((o) => ({
+      t: o.t, text: outText.get(o.id), role: 'owner', id: o.id, state: o.state, ...(outMeta.get(o.id) || {}),
+    }));
     const time = (m) => Date.parse(m.t) || 0;
     const list = [...pend, ...messages].map((m, i) => [m, i])
       // Newest time first. A tied time keeps feed order: the later entry is newer.
@@ -328,12 +466,23 @@
     const sc = $('scroll'), ol = $('convo');
     const atBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40;
     const keep = new Set();
+    rendered.clear();
     let added = false, prev = null;
     for (const m of list) {
       const key = m.id ? 'i:' + m.id : 'c:' + m.ct;
       keep.add(key);
-      const label = (m.role === 'owner' ? 'You · ' : assistantName + ' · ') + fmtTime(m.t) + (m.state ? MARK[m.state] : '');
-      const sig = m.role + '|' + (m.state || '') + '|' + label + '|' + m.text;
+      rendered.set(key, m);
+      const draft = isDraft(m);
+      const fields = draft ? draftFields(m) : null;
+      const canon = fields ? draftCanonical(fields.to, fields.subject, fields.body) : '';
+      const hash = canon ? (hashCache.get(canon) || '') : '';
+      const showSend = !!(fields && hash && !draftApproved(fields.draftId, hash));
+      const approval = m.kind === 'send_draft';
+      const label = approval ? '' : (m.role === 'owner' ? 'You · ' : assistantName + ' · ') + fmtTime(m.t) + (m.state ? MARK[m.state] : '');
+      const shown = approval
+        ? ('Approved ✓' + (m.draftId ? '\n' + m.draftId : '') + (m.state === 'failed' ? MARK.failed : ''))
+        : (draft ? fields.to + '\n' + fields.subject + '\n' + fields.body : m.text);
+      const sig = m.role + '|' + (m.state || '') + '|' + (m.kind || '') + '|' + label + '|' + shown + '|' + (showSend ? '1' : '0');
       let n = nodes.get(key);
       if (!n) {
         const li = document.createElement('li');
@@ -342,18 +491,59 @@
         n = { li, sig: '' }; nodes.set(key, n); added = true;
       }
       if (n.sig !== sig) {
-        n.li.className = 'msg ' + m.role + (m.state ? ' pending ' + m.state : '');
+        n.li.className = 'msg ' + m.role + (draft ? ' draft' : '') + (approval ? ' approved' : '') + (m.state ? ' pending ' + m.state : '');
         if (m.state) n.li.dataset.id = m.id; else delete n.li.dataset.id;
-        n.li.firstChild.textContent = label;
-        n.li.lastChild.textContent = m.text;
+        n.li.dataset.key = key;
+        const timeEl = n.li.firstChild;
+        timeEl.hidden = approval;
+        timeEl.textContent = label;
+        const textEl = n.li.querySelector('.text');
+        textEl.replaceChildren();
+        if (draft) {
+          for (const [name, value] of [['To', fields.to], ['Subject', fields.subject]]) {
+            const line = document.createElement('div');
+            const k = document.createElement('span');
+            k.className = 'draft-k';
+            k.textContent = name + ': ';
+            line.append(k, document.createTextNode(value));
+            textEl.append(line);
+          }
+          const body = document.createElement('div');
+          body.className = 'draft-body';
+          body.textContent = fields.body;
+          textEl.append(body);
+        } else {
+          textEl.textContent = approval ? shown : m.text;
+        }
+        let btn = n.li.querySelector('.draft-send');
+        if (showSend) {
+          if (!btn) {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'send draft-send focusable';
+            btn.textContent = 'Send';
+            n.li.append(btn);
+          }
+          btn.hidden = false;
+          btn.setAttribute('aria-label', 'Send draft' + (fields.to ? ' to ' + fields.to : ''));
+        } else if (btn) btn.remove();
         n.sig = sig;
       }
       // A bubble can take the highlight (a new message does). Select on it
       // jumps to the reply buttons, which live outside this scroller.
+      // A draft's own Send is the button under that bubble.
       n.li.tabIndex = 0;
       n.li.classList.add('focusable');
-      n.li.setAttribute('role', 'button');
-      n.li.setAttribute('aria-label', m.state === 'failed' ? 'Retry sending' : 'Show quick replies');
+      if (draft) {
+        n.li.setAttribute('role', 'article');
+        n.li.setAttribute('aria-label', 'Draft email' + (fields && fields.to ? ' to ' + fields.to : ''));
+      } else if (approval) {
+        n.li.setAttribute('role', 'article');
+        n.li.setAttribute('aria-label', m.state === 'failed' ? 'Retry sending approval' : 'Approved ' + (m.draftId || ''));
+      } else {
+        n.li.setAttribute('role', 'button');
+        n.li.setAttribute('aria-label', m.state === 'failed' ? 'Retry sending' : 'Show quick replies');
+      }
       const want = prev ? prev.nextSibling : ol.firstChild;
       if (want !== n.li) ol.insertBefore(n.li, want);
       prev = n.li;
@@ -365,6 +555,7 @@
     placeQuick();
     $('empty').hidden = list.length > 0;
     $('read-btn').disabled = !latestChief();
+    scheduleHashes(list);
     if (atBottom || added) scrollEnd();
   }
   // Reply buttons are real buttons in the page, between the transcript and the
@@ -402,7 +593,13 @@
       list = uniqueById(await decryptItems(feed, key));
       if (!keyRec || keyRec.key !== key) remember(feed.salt, iter, key);
       feedSalt = feed.salt; feedIter = iter;
-      for (const o of outbox) if (!outText.has(o.id)) { try { outText.set(o.id, await decryptArmored(o.armored, key)); } catch { /* drop later */ } }
+      for (const o of outbox) if (!outText.has(o.id)) {
+        try {
+          const parsed = await decryptArmored(o.armored, key);
+          outText.set(o.id, String(parsed.text ?? ''));
+          if (parsed.kind === 'send_draft') outMeta.set(o.id, { kind: 'send_draft', draftId: String(parsed.draftId || ''), draftHash: String(parsed.draftHash || '') });
+        } catch { /* drop later */ }
+      }
     }
     noteSeen(list);
     feedText = text;
@@ -421,7 +618,7 @@
     render();
     const nc = latestChief();
     if (nc && (!lastHeard || new Date(nc.t) > new Date(lastHeard))) {
-      if (alert && lastHeard) { alertNew(nc.text); activity(); }
+      if (alert && lastHeard) { alertNew(spoken(nc)); activity(); }
       lastHeard = nc.t; store.set(LS_HEARD, lastHeard);
       if (waitUntil) { waitUntil = 0; setStatus('ok', assistantName + ' replied ✓'); }
     }
@@ -565,26 +762,46 @@
     else if (waitUntil) setStatus('ok', 'Sent ✓ Waiting for ' + assistantName + '…');
   }
   function startWaiting() { waitUntil = Date.now() + WAIT_MS; wake(); startPolling(true); }
-  async function send(preset) {
-    const input = $('msg');
-    const fromField = typeof preset !== 'string';
-    const text = (fromField ? input.value : preset).trim();
-    if (!text) { setStatus('err', 'Type or speak a message first.'); input.focus(); return; }
+  // Chat Send and a draft's Send share delivery. extra is set only for kind send_draft.
+  async function queueOwner(text, extra) {
     if (!emailConfigured() && !BACKUP) {
       setStatus('err', 'Sending is not set up. For email, set config.js line 9 (web3formsKey) or line 14 (formsubmitId). For ntfy, set line 19 (ntfyTopic).');
-      return;
+      return false;
     }
-    if (!keyRec || !feedSalt) { setStatus('err', 'Not ready yet. Tap Refresh, then try again.'); return; }
-    const m = await encryptMessage(text, keyRec.key, feedSalt, feedIter);
+    if (!keyRec || !feedSalt) { setStatus('err', 'Not ready yet. Tap Refresh, then try again.'); return false; }
+    const m = await encryptMessage(text, keyRec.key, feedSalt, feedIter, extra);
     const o = { ...m, state: 'sending' };
     outText.set(o.id, text);
+    if (extra && extra.kind === 'send_draft') outMeta.set(o.id, { kind: 'send_draft', draftId: String(extra.draftId || ''), draftHash: String(extra.draftHash || '') });
     outbox.push(o); saveOutbox();
-    if (fromField) input.value = '';
     render(); scrollEnd();
     setStatus('busy', 'Sending in the background…');
     startWaiting();
     if (emailConfigured()) backupCopy(o);
     deliver(o);
+    return true;
+  }
+  async function send(preset) {
+    const input = $('msg');
+    const fromField = typeof preset !== 'string';
+    const text = (fromField ? input.value : preset).trim();
+    if (!text) { setStatus('err', 'Type or speak a message first.'); input.focus(); return; }
+    const queued = await queueOwner(text);
+    if (queued && fromField) input.value = '';
+  }
+  // The green Send under one draft. Plain chat, Yes, and the words SEND_DRAFT do not come through here.
+  const sendingDraft = new Set();
+  async function sendDraft(m) {
+    if (!isDraft(m)) return;
+    const f = draftFields(m);
+    const canon = draftCanonical(f.to, f.subject, f.body);
+    if (sendingDraft.has(canon)) return;
+    const hash = hashCache.get(canon) || await draftHash(f.to, f.subject, f.body);
+    hashCache.set(canon, hash);
+    if (draftApproved(f.draftId, hash)) return;
+    sendingDraft.add(canon);
+    try { await queueOwner('Approved ✓', { kind: 'send_draft', draftId: f.draftId, draftHash: hash }); }
+    finally { sendingDraft.delete(canon); }
   }
 
   // ---------- unlock / start ----------
@@ -663,6 +880,13 @@
   });
   $('convo').addEventListener('click', (ev) => {
     if (ev.target.closest('#quick-replies')) return;
+    const draftBtn = ev.target.closest('.draft-send');
+    if (draftBtn) {
+      const li = draftBtn.closest('li');
+      const m = li && rendered.get(li.dataset.key);
+      if (m) sendDraft(m);
+      return;
+    }
     const failed = ev.target.closest('li.failed');
     if (failed) {
       const o = outbox.find((x) => x.id === failed.dataset.id);
@@ -673,14 +897,16 @@
     // highlight has moved on to Forget or another message.
     if (ev.target.closest('li.msg')) focusReplyRow();
   });
-  $('read-btn').addEventListener('click', () => { const m = latestChief(); if (m) speak(m.text); });
+  $('read-btn').addEventListener('click', () => { const m = latestChief(); if (m) speak(spoken(m)); });
   $('refresh-btn').addEventListener('click', () => { setChecked('Checking…'); refresh(); });
   $('auto-btn').addEventListener('click', () => {
     auto = !auto; store.set(LS_AUTO, auto ? 'on' : 'off'); renderToggles();
     if (!auto && canSpeak()) speechSynthesis.cancel();
   });
   $('saver-btn').addEventListener('click', () => { saver = !saver; store.set(LS_SAVER, saver ? 'on' : 'off'); renderToggles(); activity(); });
-  $('banner').addEventListener('click', () => { $('banner').hidden = true; document.body.classList.remove('new'); const m = latestChief(); if (m) speak(m.text); });
+  $('about-btn').addEventListener('click', openAbout);
+  $('about-back').addEventListener('click', () => closeAbout(false));
+  $('banner').addEventListener('click', () => { $('banner').hidden = true; document.body.classList.remove('new'); const m = latestChief(); if (m) speak(spoken(m)); });
   // Forget is two steps. The first tap only opens this prompt; Cancel is the focused choice.
   let confirmOpen = false;
   function setCovered(on) {
@@ -710,7 +936,7 @@
     // Seen ids and the newest timestamp stay, so an old copied message still will not pop up.
     idb.clear();
     sleep();
-    keyRec = null; messages = []; feedMsgs = []; live = []; outbox = []; outText.clear(); feedText = null; feedSalt = null; waitUntil = 0; lastHeard = '';
+    keyRec = null; messages = []; feedMsgs = []; live = []; outbox = []; outText.clear(); outMeta.clear(); hashCache.clear(); feedText = null; feedSalt = null; waitUntil = 0; lastHeard = '';
     if (canSpeak()) speechSynthesis.cancel();
     render(); setStatus('', '');
     showLock('Passphrase forgotten.');
@@ -747,6 +973,7 @@
   }
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') {
+      if (aboutOpen) { ev.preventDefault(); closeAbout(false); return; }
       if (!confirmOpen) return;
       ev.preventDefault();
       cancelForget(false);
@@ -782,10 +1009,15 @@
     if (ev.key !== 'Enter' || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
     const el = document.activeElement;
     if (!el || !el.classList || !el.classList.contains('msg')) return;
+    const sendBtn = el.querySelector('.draft-send');
+    if (sendBtn && !sendBtn.hidden) { ev.preventDefault(); sendBtn.focus(); return; }
     ev.preventDefault();
     el.click();
   });
-  window.addEventListener('popstate', () => { if (confirmOpen) cancelForget(true); });
+  window.addEventListener('popstate', () => {
+    if (aboutOpen) closeAbout(true);
+    else if (confirmOpen) cancelForget(true);
+  });
   // Any interaction wakes the app (cheap no-op when already awake: just re-arms one timeout).
   for (const ev of ['pointerdown', 'keydown', 'focus']) window.addEventListener(ev, wake, { passive: true, capture: true });
   // Hide, freeze, and pagehide all mean the glasses left this page. Stop radios and speech.
@@ -801,11 +1033,11 @@
   window.addEventListener('pageshow', (ev) => { if (ev.persisted && !document.hidden) wake(); });
   window.addEventListener('online', () => { if (unlocked() && !asleep) { connectLive(); refresh(); } });
 
-  window.ChiefCrypto = { pbkdf2, decryptItems, encryptMessage, isReplay, noteSeen };
+  window.ChiefCrypto = { pbkdf2, decryptItems, encryptMessage, isReplay, noteSeen, draftHash, draftCanonical, isDraft, isSendDraft };
   // Glasses Back exits only when nothing is left to go back to, and the first
   // such Back opens the system menu (Resume). Do not push an entry here.
-  // A leftover forget prompt is dropped so it cannot add a permanent extra step.
-  if (history.state && history.state.chief === 'confirm-forget' && history.length > 1) history.back();
+  // A leftover forget prompt or About screen is dropped so it cannot add a permanent extra step.
+  if (history.state && (history.state.chief === 'confirm-forget' || history.state.chief === 'about') && history.length > 1) history.back();
   else if (!history.state || history.state.chief !== 'root') history.replaceState({ chief: 'root' }, '');
   start();
 })();

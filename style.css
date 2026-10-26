@@ -41,7 +41,9 @@ button:active { border-color: #d8d8d8; }
 .feed > * { flex: 0 0 auto; }
 .feed > .scroll { flex: 1 1 auto; }
 .top { display: flex; justify-content: space-between; align-items: center; gap: 0.5em; }
-.checked { color: #8a8a8a; font-size: 0.7em; text-align: end; }
+.top-side { display: flex; align-items: center; justify-content: flex-end; gap: 0.35em; min-inline-size: 0; }
+.header-saver { flex: 0 0 auto; font-size: 0.62em; font-weight: 500; min-block-size: 1.7em; padding: 0.12em 0.4em; white-space: nowrap; }
+.checked { color: #8a8a8a; font-size: 0.7em; text-align: end; white-space: nowrap; }
 .error { margin: 0; padding: 0.25em 0.5em; color: #f0a0a0; border: 2px solid #b04a4a; border-radius: 0.4em; font-weight: 700; font-size: 0.85em; }
 .banner { inline-size: 100%; color: #e0bf7a; border-color: #c9a250; font-size: 1em; min-block-size: 1.9em; }
 .scroll { min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; padding-inline-end: 0.2em; }
@@ -57,6 +59,17 @@ button:active { border-color: #d8d8d8; }
 .msg .text { font-size: 1em; font-weight: 600; color: #dcdcdc; }
 .msg.owner .text { color: #c8d2f0; }
 .msg.chief.latest .text { font-size: 1.12em; color: #ececec; }
+/* A draft has to show To, Subject, body, and Send together on a 600px glasses screen. */
+.msg.draft { padding-block: 0.15em 0.2em; line-height: 1.15; }
+.msg.draft .time { font-size: 0.62em; line-height: 1.15; }
+.msg.draft .text,
+.msg.chief.draft.latest .text { font-size: 0.95em; line-height: 1.15; color: #ececec; }
+.draft-k { font-weight: 800; }
+.draft-body { white-space: pre-wrap; margin-top: 0.05em; }
+.msg .draft-send {
+  display: block; inline-size: 100%; margin-top: 0.2em;
+  min-block-size: 2em; padding-block: 0.12em; font-size: 1em;
+}
 /* Not a scroller. Directional focus walks onto these buttons from the message box and the controls. */
 .quick-replies {
   display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0; padding: 0;
@@ -72,11 +85,24 @@ button:active { border-color: #d8d8d8; }
 .compose input { flex: 1 1 auto; }
 .send { flex: 0 0 auto; min-inline-size: 4.2em; font-size: 1.15em; color: #7fe0a8; border-color: #3f9a68; }
 .send-status { margin: 0; min-block-size: 1.1em; font-size: 0.78em; font-weight: 700; color: #a8a8a8; }
+.send-status:empty { display: none; }
 .send-status[data-kind="ok"] { color: #7fe0a8; }
 .send-status[data-kind="err"] { color: #f0a0a0; }
 .send-status[data-kind="busy"] { color: #e0bf7a; }
-.controls { display: flex; gap: 0.25em; }
-.controls button { flex: 1 1 0; font-size: 0.62em; padding-inline: 0.2em; min-block-size: 2.6em; }
+.controls { display: flex; flex-direction: column; gap: 0.3em; }
+.control-row { display: flex; flex-wrap: wrap; gap: 0.3em; }
+.control-row button { flex: 1 1 calc(50% - 0.3em); font-size: 0.72em; padding-inline: 0.25em; min-block-size: 2.5em; }
+.forget-row { inline-size: 100%; font-size: 0.72em; min-block-size: 2.4em; }
+.about { display: flex; flex-direction: column; gap: 0.15em; min-block-size: 0; }
+.about h1 { margin: 0.15em 0 0.35em; font-size: 1.8em; font-weight: 800; color: #6cc7e0; }
+.about p { margin: 0.35em 0; font-weight: 600; }
+.about-version { color: #ececec; font-weight: 800; }
+.about-help { margin-top: 0.8em; }
+.about-link { color: #6cc7e0; font-weight: 800; overflow-wrap: anywhere; }
+.about-back {
+  margin-top: auto; min-block-size: 3.4em; font-size: 1.25em;
+  color: #6cc7e0; border-color: #6cc7e0; border-width: 3px;
+}
 .confirm {
   position: absolute; inset: 0; z-index: 3; background: #000; color: #ececec;
   display: flex; flex-direction: column; justify-content: center; gap: 0.9em; padding: 5vmin 3vmin;
