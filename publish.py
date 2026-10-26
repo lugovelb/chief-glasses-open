@@ -135,24 +135,23 @@ def derive_key(passphrase: str, salt: bytes, iterations: int) -> bytes:
     )
 
 
-def draft_canonical(to: str, subject: str, body: str) -> str:
-    """Length-prefixed to|subject|body.
+def draft_canonical(to: str, subject: str, body: str) -> bytes:
+    """Length-prefixed to, subject, body.
 
-    Each field is its UTF-8 byte length in decimal, a colon, then the field.
-    The three pieces are joined with a pipe. SHA-256 of that UTF-8 string,
-    lowercase hex, first 12 characters, is the draftHash.
+    Each field is its UTF-8 byte length in decimal ASCII, a newline byte
+    (0x0A), then the field's UTF-8 bytes. The three pieces are concatenated.
+    SHA-256 of those bytes, lowercase hex, first 12 characters, is the draftHash.
     """
 
-    def piece(value: str) -> str:
-        text = "" if value is None else str(value)
-        return f"{len(text.encode('utf-8'))}:{text}"
+    def piece(value: str) -> bytes:
+        raw = ("" if value is None else str(value)).encode("utf-8")
+        return str(len(raw)).encode("ascii") + b"\n" + raw
 
-    return "|".join((piece(to), piece(subject), piece(body)))
+    return piece(to) + piece(subject) + piece(body)
 
 
 def draft_hash(to: str, subject: str, body: str) -> str:
-    digest = hashlib.sha256(draft_canonical(to, subject, body).encode("utf-8")).hexdigest()
-    return digest[:12]
+    return hashlib.sha256(draft_canonical(to, subject, body)).hexdigest()[:12]
 
 
 def encrypt_item(key: bytes, text: str, role: str, extra: dict | None = None) -> dict:
@@ -334,11 +333,17 @@ def main() -> None:
             print("A draft email is a reply, so leave --role as chief.", file=sys.stderr)
             sys.exit(1)
         extra = {
-            "kind": "draft_email",
+            "kind": "draft",
             "draftId": args.draft_id,
             "to": args.to,
             "subject": args.subject,
             "body": args.body,
+            "draft": {
+                "id": args.draft_id,
+                "to": args.to,
+                "subject": args.subject,
+                "body": args.body,
+            },
         }
         text = args.message if args.message is not None else f"Draft: {args.subject}".strip()
         if not text:

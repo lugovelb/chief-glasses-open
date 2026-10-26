@@ -125,23 +125,37 @@ The file keeps the newest 20 messages.
 
 ## Draft email
 
-A chief message is a drafted email when it has `"kind": "draft_email"` and a `draftId`. It also counts when `draftId`, `to`, `subject`, and `body` are all present. The glasses show those three fields. They do not show `text` for that message.
+This is the same draft protocol as the personal Chief app, so one sender can feed both.
+
+A chief message is a drafted email when `"kind"` is `draft` and it has a draft id. The id, To, Subject, and body live in a nested `draft` object. The same four values are also copied to `draftId`, `to`, `subject`, and `body` on the message. The glasses read the nested object when it is present, and the top-level fields otherwise. They do not show `text` for that message.
+
+```json
+{
+  "kind": "draft",
+  "draft": { "id": "emily-ultrasound-2026-10-28", "to": "Emily", "subject": "Tuesday ultrasound", "body": "Hi Emily, confirming Tuesday ultrasound at 1:00 PM." },
+  "draftId": "emily-ultrasound-2026-10-28",
+  "to": "Emily",
+  "subject": "Tuesday ultrasound",
+  "body": "Hi Emily, confirming Tuesday ultrasound at 1:00 PM."
+}
+```
 
 An owner message approves that exact draft only when all of these are true:
 
+- `"role"` is `owner`
 - `"kind"` is `send_draft`
 - `draftId` matches the draft
 - `draftHash` matches the hash of the current To, Subject, and body
 
-A chat line, **Yes**, and the string `SEND_DRAFT` are ordinary messages. They do not approve a draft. After a real approval, the glasses show a bubble that says **Approved ✓** and the draft id. If the same draft id comes back with different words, the hash changes and **Send** stays until the new hash is approved.
-
-`draftHash` is the first 12 lowercase hex characters of SHA-256. The hashed string is length-prefixed `to|subject|body`:
+The message text is `SEND_DRAFT`, the draft id, and the hash, separated by single spaces:
 
 ```text
-{utf8ByteLength(to)}:{to}|{utf8ByteLength(subject)}:{subject}|{utf8ByteLength(body)}:{body}
+SEND_DRAFT emily-ultrasound-2026-10-28 1c2f53dfc215
 ```
 
-Lengths are the number of UTF-8 bytes, written in decimal. The pipe characters are separators. Hash the UTF-8 bytes of that whole string.
+A chat line, **Yes**, the words `SEND_DRAFT` alone, and a `send_draft` message whose role is not `owner` do not approve a draft. After a real approval, the glasses show a bubble that says **Approved ✓** and the draft id. They do not show the `SEND_DRAFT` line. If the same draft id comes back with different words, the hash changes and **Send** stays until the new hash is approved.
+
+`draftHash` is the first 12 lowercase hex characters of SHA-256. The hashed bytes are length-prefixed `to`, then `subject`, then `body`. Each field is its UTF-8 byte length written in decimal, a newline byte (`0x0A`), then the field's UTF-8 bytes. There is no extra separator between fields.
 
 Example:
 
@@ -152,10 +166,13 @@ Body: Hi Emily, confirming Tuesday ultrasound at 1:00 PM.
 ```
 
 ```text
-5:Emily|18:Tuesday ultrasound|51:Hi Emily, confirming Tuesday ultrasound at 1:00 PM.
+5
+Emily18
+Tuesday ultrasound51
+Hi Emily, confirming Tuesday ultrasound at 1:00 PM.
 ```
 
-`draftHash` for that text is `7f4483e42712`. A trailing space would be a different hash. Check a value with:
+That block is the raw bytes. Each newline is the `0x0A` before a field, so the next length continues on the same line as the previous field. `draftHash` for that text is `1c2f53dfc215`. A trailing space would be a different hash. Check a value with:
 
 ```bash
 python publish.py --draft-hash --to "Emily" --subject "Tuesday ultrasound" \
@@ -171,7 +188,9 @@ python publish.py --draft-id emily-ultrasound-2026-10-28 \
   --body "Hi Emily, confirming Tuesday ultrasound at 1:00 PM."
 ```
 
-The page's green **Send** under the draft writes the `send_draft` owner message. You do not type that by hand.
+The page's green **Send** under the draft writes that owner message. You do not type it by hand. On the glasses, Down at the bottom of the transcript moves to that **Send**, and Down again moves to **Yes**. Up from **Yes** moves back to **Send**, then into the transcript.
+
+The About screen (version, date, and the link to this public template) is the open copy. The draft hash, kind `draft`, and `SEND_DRAFT` text match the personal app.
 
 ## About
 
@@ -227,7 +246,7 @@ Use your `https://` Pages address and the passphrase you publish with.
 
 **How do I hide Yes / No / Later / Tell me more?** Add `?replies=0` to the address. The green Send under a drafted email stays. That Send is the approval for that draft, not a chat reply.
 
-**What approves a drafted email?** Only an owner message with kind `send_draft`, the same `draftId`, and the `draftHash` of the current To, Subject, and body. See the Draft email section above. Typing Yes, or the words SEND_DRAFT, does not send the email.
+**What approves a drafted email?** Only an owner message with kind `send_draft`, the same `draftId`, and the `draftHash` of the current To, Subject, and body. The text of that message is `SEND_DRAFT`, the id, and the hash. See the Draft email section above. Typing Yes, or the words SEND_DRAFT, does not send the email. A `send_draft` from the assistant does not either.
 
 **Where is About?** With Read aloud, Refresh, and Auto-read. Forget passphrase is on its own row. Saver is in the header. Help and setup on that screen point at this public template: https://github.com/lugovelb/chief-glasses-open.
 

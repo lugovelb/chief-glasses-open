@@ -159,6 +159,27 @@
       if (typeof m.to === 'string') row.to = m.to;
       if (typeof m.subject === 'string') row.subject = m.subject;
       if (typeof m.body === 'string') row.body = m.body;
+      // Personal drafts nest To, Subject, and body under draft. Flat fields are the same values.
+      if (m.draft && typeof m.draft === 'object') {
+        const d = m.draft;
+        const nested = {
+          id: typeof d.id === 'string' ? d.id : '',
+          to: typeof d.to === 'string' ? d.to : '',
+          subject: typeof d.subject === 'string' ? d.subject : '',
+          body: typeof d.body === 'string' ? d.body : '',
+        };
+        row.draft = nested;
+        if (nested.id) row.draftId = nested.id;
+        if (typeof d.to === 'string') row.to = d.to;
+        if (typeof d.subject === 'string') row.subject = d.subject;
+        if (typeof d.body === 'string') row.body = d.body;
+      }
+      if ((row.kind === 'draft' || (row.draft && row.draft.id)) && row.draftId) {
+        row.kind = 'draft';
+        if (typeof row.to !== 'string') row.to = '';
+        if (typeof row.subject !== 'string') row.subject = '';
+        if (typeof row.body !== 'string') row.body = '';
+      }
       out.push(row);
     }
     return out;
@@ -183,12 +204,11 @@
     return JSON.parse(dec.decode(pt));
   }
 
-  // A drafted email is kind draft_email, or any chief message that already has
-  // draftId plus To, Subject, and body. The free-form text is not shown.
+  // A drafted email is kind "draft" (nested under draft, or the same fields at the top level).
+  // The free-form text is not shown. kind draft_email is not this protocol.
   function isDraft(m) {
-    if (!m || m.role === 'owner') return false;
+    if (!m || m.role === 'owner' || m.kind !== 'draft') return false;
     if (typeof m.draftId !== 'string' || m.draftId.length === 0) return false;
-    if (m.kind === 'draft_email') return true;
     return typeof m.to === 'string' && typeof m.subject === 'string' && typeof m.body === 'string';
   }
   function draftFields(m) {
@@ -199,28 +219,46 @@
       body: typeof m.body === 'string' ? m.body : '',
     };
   }
-  // draftHash = first 12 lowercase hex of SHA-256 over
-  //   utf8ByteLength(to) + ":" + to + "|"
-  //   utf8ByteLength(subject) + ":" + subject + "|"
-  //   utf8ByteLength(body) + ":" + body
-  // Lengths are UTF-8 byte counts, written in decimal. The pipe is the separator.
+  // draftHash = first 12 lowercase hex of SHA-256 over the UTF-8 bytes
+  //   decimalByteLength(to) + 0x0A + to
+  //   decimalByteLength(subject) + 0x0A + subject
+  //   decimalByteLength(body) + 0x0A + body
+  // Lengths are UTF-8 byte counts, written in decimal ASCII. 0x0A is a newline.
+  function draftCanonicalBytes(to, subject, body) {
+    const chunks = [to, subject, body].map((value) => {
+      const raw = enc.encode(String(value ?? ''));
+      const head = enc.encode(String(raw.length) + '\n');
+      const buf = new Uint8Array(head.length + raw.length);
+      buf.set(head, 0);
+      buf.set(raw, head.length);
+      return buf;
+    });
+    const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    let off = 0;
+    for (const c of chunks) { out.set(c, off); off += c.length; }
+    return out;
+  }
+  // Cache key for those exact bytes. charCode 0–255 round-trips the preimage.
   function draftCanonical(to, subject, body) {
-    const lp = (value) => {
-      const text = String(value ?? '');
-      return enc.encode(text).length + ':' + text;
-    };
-    return lp(to) + '|' + lp(subject) + '|' + lp(body);
+    let s = '';
+    for (const b of draftCanonicalBytes(to, subject, body)) s += String.fromCharCode(b);
+    return s;
   }
   function hexOf(buf) {
     return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
   }
   async function draftHash(to, subject, body) {
-    const dig = await crypto.subtle.digest('SHA-256', enc.encode(draftCanonical(to, subject, body)));
+    const dig = await crypto.subtle.digest('SHA-256', draftCanonicalBytes(to, subject, body));
     return hexOf(dig).slice(0, 12);
   }
-  // Only kind send_draft with this draftId and this hash approves. Chat text does not.
+  // The text a receiver reads. The bubble still says Approved.
+  function sendDraftText(draftId, hash) {
+    return 'SEND_DRAFT ' + draftId + ' ' + hash;
+  }
+  // Only an owner message of kind send_draft with this draftId and this hash approves.
+  // An assistant-role send_draft does not. Chat text, including a bare SEND_DRAFT line, does not.
   function isSendDraft(m, draftId, hash) {
-    return !!m && m.kind === 'send_draft' && m.draftId === draftId && m.draftHash === hash;
+    return !!m && m.role === 'owner' && m.kind === 'send_draft' && m.draftId === draftId && m.draftHash === hash;
   }
   function spoken(m) {
     if (!m) return '';
@@ -228,7 +266,7 @@
       const f = draftFields(m);
       return 'To ' + f.to + '. Subject ' + f.subject + '. ' + f.body;
     }
-    if (m.kind === 'send_draft') return 'Approved.';
+    if (m.role === 'owner' && m.kind === 'send_draft') return 'Approved.';
     return m.text || '';
   }
 
@@ -435,7 +473,9 @@
     const run = async () => {
       for (const c of missing) {
         if (hashCache.has(c)) continue;
-        const dig = await crypto.subtle.digest('SHA-256', enc.encode(c));
+        const raw = new Uint8Array(c.length);
+        for (let i = 0; i < c.length; i++) raw[i] = c.charCodeAt(i);
+        const dig = await crypto.subtle.digest('SHA-256', raw);
         hashCache.set(c, hexOf(dig).slice(0, 12));
       }
     };
@@ -477,7 +517,7 @@
       const canon = fields ? draftCanonical(fields.to, fields.subject, fields.body) : '';
       const hash = canon ? (hashCache.get(canon) || '') : '';
       const showSend = !!(fields && hash && !draftApproved(fields.draftId, hash));
-      const approval = m.kind === 'send_draft';
+      const approval = m.role === 'owner' && m.kind === 'send_draft';
       const label = approval ? '' : (m.role === 'owner' ? 'You · ' : assistantName + ' · ') + fmtTime(m.t) + (m.state ? MARK[m.state] : '');
       const shown = approval
         ? ('Approved ✓' + (m.draftId ? '\n' + m.draftId : '') + (m.state === 'failed' ? MARK.failed : ''))
@@ -597,7 +637,7 @@
         try {
           const parsed = await decryptArmored(o.armored, key);
           outText.set(o.id, String(parsed.text ?? ''));
-          if (parsed.kind === 'send_draft') outMeta.set(o.id, { kind: 'send_draft', draftId: String(parsed.draftId || ''), draftHash: String(parsed.draftHash || '') });
+          if (parsed.kind === 'send_draft' && parsed.role === 'owner') outMeta.set(o.id, { role: 'owner', kind: 'send_draft', draftId: String(parsed.draftId || ''), draftHash: String(parsed.draftHash || '') });
         } catch { /* drop later */ }
       }
     }
@@ -772,7 +812,7 @@
     const m = await encryptMessage(text, keyRec.key, feedSalt, feedIter, extra);
     const o = { ...m, state: 'sending' };
     outText.set(o.id, text);
-    if (extra && extra.kind === 'send_draft') outMeta.set(o.id, { kind: 'send_draft', draftId: String(extra.draftId || ''), draftHash: String(extra.draftHash || '') });
+    if (extra && extra.kind === 'send_draft') outMeta.set(o.id, { role: 'owner', kind: 'send_draft', draftId: String(extra.draftId || ''), draftHash: String(extra.draftHash || '') });
     outbox.push(o); saveOutbox();
     render(); scrollEnd();
     setStatus('busy', 'Sending in the background…');
@@ -800,7 +840,7 @@
     hashCache.set(canon, hash);
     if (draftApproved(f.draftId, hash)) return;
     sendingDraft.add(canon);
-    try { await queueOwner('Approved ✓', { kind: 'send_draft', draftId: f.draftId, draftHash: hash }); }
+    try { await queueOwner(sendDraftText(f.draftId, hash), { kind: 'send_draft', draftId: f.draftId, draftHash: hash }); }
     finally { sendingDraft.delete(canon); }
   }
 
@@ -948,9 +988,25 @@
   // Meta Ray-Ban Display delivers touchpad and Neural Band input as keydown:
   // ArrowUp, ArrowDown, ArrowLeft, ArrowRight, and Enter. Chromium moves focus
   // by on-screen position. Enter activates the focused control, which fires click
-  // on a real button. This page does not take over those arrow keys.
+  // on a real button. This page does not take over those arrow keys, except Up
+  // and Down on the transcript, and the draft Send path below. A draft's Send
+  // sits inside the scroller, so spatial navigation never lands on it.
+  // Down at the bottom of the transcript focuses that Send, then Yes.
+  // Up from Yes focuses that Send, then the transcript.
   // Left and Right inside the passphrase or message field move the text cursor.
   // At either end of the text, spatial navigation would otherwise leave the field.
+  function visibleDraftSend() {
+    const buttons = document.querySelectorAll('#convo .draft-send');
+    for (let i = buttons.length - 1; i >= 0; i--) {
+      if (!buttons[i].hidden) return buttons[i];
+    }
+    return null;
+  }
+  function firstReply() {
+    const row = $('quick-replies');
+    if (!row || row.hidden) return null;
+    return row.querySelector('button');
+  }
   function nudgeCaret(el, dir, shift) {
     const len = el.value.length;
     let a = el.selectionStart;
@@ -987,15 +1043,35 @@
       }
       return;
     }
+    // Draft Send is between the transcript and Yes. Arrow keys have to move
+    // there explicitly: the button is inside the scrolling transcript.
+    if ((ev.key === 'ArrowUp' || ev.key === 'ArrowDown') && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
+      const el = document.activeElement;
+      const send = visibleDraftSend();
+      const yes = firstReply();
+      if (send && el && el.classList && el.classList.contains('draft-send')) {
+        ev.preventDefault();
+        if (ev.key === 'ArrowUp') $('scroll').focus();
+        else if (yes) yes.focus();
+        else $('msg').focus();
+        return;
+      }
+      if (ev.key === 'ArrowUp' && send && el && el.closest && el.closest('#quick-replies')) {
+        ev.preventDefault();
+        send.focus();
+        return;
+      }
+    }
     // The transcript sits above the reply buttons. While it has the highlight,
-    // Up and Down scroll it. Down at the bottom returns to the reply row.
+    // Up and Down scroll it. Down at the bottom moves to draft Send, then Yes.
     if ((ev.key === 'ArrowUp' || ev.key === 'ArrowDown') && !ev.altKey && !ev.ctrlKey && !ev.metaKey && document.activeElement === $('scroll')) {
       const sc = $('scroll');
       const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
       const step = Math.max(48, Math.round(sc.clientHeight * 0.8));
       if (ev.key === 'ArrowDown' && sc.scrollTop >= max - 1) {
-        const row = $('quick-replies');
-        const next = row && !row.hidden && row.querySelector('button');
+        const send = visibleDraftSend();
+        if (send) { ev.preventDefault(); send.focus(); return; }
+        const next = firstReply();
         if (next) { ev.preventDefault(); next.focus(); }
         return;
       }

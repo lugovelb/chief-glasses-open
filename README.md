@@ -83,7 +83,7 @@ This uses Meta's developer preview. The taps change. Chief is not an official Me
 1. Turn on Developer Mode using only this section: [Enabling Developer Mode in the Meta AI app](https://wearables.developer.meta.com/docs/develop/webapps/setup/#enabling-developer-mode-in-the-meta-ai-app).
 2. Add the page by its address using only this section: [Load the Web App on your glasses](https://wearables.developer.meta.com/docs/develop/webapps/test/#load-the-web-app-on-your-glasses).
 3. Use the `https://` address from Pages. Do not use `http://` or `127.0.0.1`.
-4. On the glasses, open Chief and type your passphrase. The reply buttons (Yes, No, Later, Tell me more) sit under the chat and above the message box. Swipe up into the chat to read older messages, then swipe down to the buttons. Swipe back to the buttons from the message box, Send, or Forget. Pinch or Select sends the highlighted one. Select a message to jump back to Yes.
+4. On the glasses, open Chief and type your passphrase. The reply buttons (Yes, No, Later, Tell me more) sit under the chat and above the message box. Swipe up into the chat to read older messages, then swipe down to the buttons. When a drafted email is showing, Down at the bottom of the transcript highlights that draft's **Send**, and Down again highlights **Yes**. Up from **Yes** returns to that **Send**, then the transcript. Swipe back to the buttons from the message box or Forget. Pinch or Select sends the highlighted one. Select a message to jump back to Yes.
 
 **About** is with **Read aloud**, **Refresh**, and **Auto-read**. **Forget passphrase** is on its own row under those. **Saver** is the quiet control in the header, next to the clock. **Back** on the About screen returns to the chat. The glasses' back control does the same.
 
@@ -99,17 +99,17 @@ Quick replies are on unless you add `?replies=0` to the address.
 
 When your assistant publishes a drafted email, the bubble shows **To**, **Subject**, and the body. Chief does not show the free-form `text` on that message, so the line on the glasses is the email you would approve.
 
-The green **Send** under the draft is the approval. It sends an owner message whose kind is `send_draft`, with that draft's `draftId` and `draftHash`. After it sends, your bubble says **Approved ✓** and the draft id.
+The green **Send** under the draft is the approval. It sends an owner message whose text is `SEND_DRAFT`, the draft id, and the `draftHash`, separated by spaces. The kind is `send_draft`. After it sends, your bubble says **Approved ✓** and the draft id. The bubble does not show the `SEND_DRAFT` line.
 
 These do not approve a draft:
 
 - A normal chat message, including one you type in the message box
 - **Yes**, **No**, **Later**, or **Tell me more**
-- The words `SEND_DRAFT` with no `send_draft` kind
+- The words `SEND_DRAFT` with no `send_draft` kind, or a `send_draft` message that is not from you
 
-The hash is the first 12 lowercase hex characters of SHA-256 over the length-prefixed fields, in order: To, Subject, body. Each field is its UTF-8 byte length, written in decimal, then a colon, then the field. A pipe sits between fields. The worked example is in [SETUP.md](SETUP.md).
+The hash is the first 12 lowercase hex characters of SHA-256 over the length-prefixed fields, in order: To, Subject, body. Each field is its UTF-8 byte length, written in decimal, then a newline byte, then the field's UTF-8 bytes. The worked example is in [SETUP.md](SETUP.md).
 
-New words for the same draft id make a new hash. **Send** stays under that draft until a `send_draft` message carries the new hash. An older approval does not cover the new text.
+New words for the same draft id make a new hash. **Send** stays under that draft until an owner `send_draft` message carries the new hash. An older approval does not cover the new text.
 
 To put a draft in your own feed, from the project folder, with `CHIEF_PASSPHRASE` already set:
 
