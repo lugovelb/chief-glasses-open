@@ -39,8 +39,9 @@ try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 except ImportError:
     print(
-        "The send script needs an extra Python piece named cryptography. "
-        "Double-click send-message again, or run: python -m pip install -r requirements.txt",
+        "The send script needs an extra Python piece named cryptography, and this Python does not have it.\n"
+        "Easiest: double-click send-message again. It now installs it into the .venv toolbox folder.\n"
+        f"By hand: \"{sys.executable}\" -m pip install -r requirements.txt",
         file=sys.stderr,
     )
     raise SystemExit(1)
