@@ -196,7 +196,7 @@ The About screen (version, date, and the link to this public template) is the op
 
 ## About
 
-**About** is in the bottom controls with **Read aloud**, **Refresh**, and **Auto-read**. **Forget passphrase** is on the next row. **Saver** is a quiet button in the header.
+**About** is in the bottom controls with **Read aloud**, **Refresh**, and **Auto-read**. **Clear chat** is the wide row under those. **Forget passphrase** is the wide row under Clear chat. **Saver** is a quiet button in the header.
 
 About shows version 1.2, dated Oct 26 2026, what Chief is, and the help link for this public template: https://github.com/lugovelb/chief-glasses-open. **Back** returns to the chat. This repository is that public template.
 
@@ -214,7 +214,7 @@ Use your `https://` Pages address and the passphrase you publish with.
 - Six or more random words. The scrambled file is public.
 - The demo passphrase is public. Do not reuse it.
 - Messages are scrambled with AES-256-GCM. The passphrase is stretched with PBKDF2-SHA256 for 310,000 iterations.
-- The passphrase is stored in the browser's local storage on that device so the next visit can open the chat. **Forget** clears that copy. It does not delete `feed.json`.
+- The passphrase is stored in the browser's local storage on that device so the next visit can open the chat. **Clear chat** hides messages already on this device and keeps the passphrase. **Forget** clears the passphrase. Neither one deletes `feed.json`.
 - Old copies of the scrambled file can remain in GitHub history. Start with a strong passphrase.
 - Lines 9, 14, and 19 are not the passphrase.
 
@@ -244,13 +244,15 @@ Use your `https://` Pages address and the passphrase you publish with.
 
 **What if I lose the passphrase?** Old messages cannot be read. Run `publish.py --new` with a new passphrase. That saves `feed.backup-<timestamp>.json` first, then starts a new file. Older scrambled copies can still exist in GitHub history.
 
-**Why does Forget ask twice?** So one stray tap does not sign you out. Cancel is the safe choice. Forget clears the passphrase from the browser's local storage on that device.
+**Why does Clear chat ask twice?** So one stray tap does not hide the conversation. Cancel is the safe choice. Clear chat hides the messages already loaded on this device. The passphrase stays, and you stay unlocked. Messages that were still sending, or that failed, stay. A reply that shows up later still appears on Refresh. Forget passphrase is separate: that one removes the passphrase.
+
+**Why does Forget ask twice?** So one stray tap does not sign you out. Cancel is the safe choice. Forget clears the passphrase from the browser's local storage on that device. It does not hide the chat the way Clear chat does.
 
 **How do I hide Yes / No / Later / Tell me more?** Add `?replies=0` to the address. The green Send under a drafted email stays. That Send is the approval for that draft, not a chat reply.
 
 **What approves a drafted email?** Only an owner message with kind `send_draft`, the same `draftId`, and the `draftHash` of the current To, Subject, and body. The text of that message is `SEND_DRAFT`, the id, and the hash. See the Draft email section above. Typing Yes, or the words SEND_DRAFT, does not send the email. A `send_draft` from the assistant does not either.
 
-**Where is About?** With Read aloud, Refresh, and Auto-read. Forget passphrase is on its own row. Saver is in the header. Help and setup on that screen point at this public template: https://github.com/lugovelb/chief-glasses-open.
+**Where is About?** With Read aloud, Refresh, and Auto-read. Clear chat is on its own row under those, and Forget passphrase is on the row under Clear chat. Saver is in the header. Help and setup on that screen point at this public template: https://github.com/lugovelb/chief-glasses-open.
 
 **Is this an official Meta app?** No. Chief is not affiliated with Meta. It is your own web page. The glasses can show it in Meta's developer preview.
 

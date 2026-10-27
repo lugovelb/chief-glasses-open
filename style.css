@@ -92,6 +92,7 @@ button:active { border-color: #d8d8d8; }
 .controls { display: flex; flex-direction: column; gap: 0.3em; }
 .control-row { display: flex; flex-wrap: wrap; gap: 0.3em; }
 .control-row button { flex: 1 1 calc(50% - 0.3em); font-size: 0.72em; padding-inline: 0.25em; min-block-size: 2.5em; }
+.clear-row,
 .forget-row { inline-size: 100%; font-size: 0.72em; min-block-size: 2.4em; }
 .about { display: flex; flex-direction: column; gap: 0.15em; min-block-size: 0; }
 .about h1 { margin: 0.15em 0 0.35em; font-size: 1.8em; font-weight: 800; color: #6cc7e0; }
