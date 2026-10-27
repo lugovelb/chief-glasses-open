@@ -24,11 +24,24 @@ if not exist ".venv\Scripts\python.exe" (
   ".venv\Scripts\python.exe" -m pip install -r requirements.txt
   if errorlevel 1 goto venvfail
 )
+
+".venv\Scripts\python.exe" -c "import cryptography.hazmat.primitives.ciphers.aead" >nul 2>&1
+if errorlevel 1 (
+  echo Installing what the send script needs into the toolbox folder ^(.venv^).
+  ".venv\Scripts\python.exe" -m pip install -r requirements.txt
+  if errorlevel 1 goto pipfail
+)
 goto run
 
 :venvfail
 if exist ".venv" rmdir /s /q ".venv"
 echo Could not install what the send script needs. The unfinished toolbox folder was removed.
+pause
+exit /b 1
+
+:pipfail
+echo Could not install it. Check your internet connection, then run this again.
+echo If it keeps failing, delete the .venv folder and run this again. Your feed.json is not touched.
 pause
 exit /b 1
 

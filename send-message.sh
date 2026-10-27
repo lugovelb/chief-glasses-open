@@ -28,9 +28,15 @@ if [ ! -x .venv/bin/python ]; then
     echo "If the message above mentions ensurepip, install the python3-venv package and run this again."
     exit 1
   fi
+fi
+
+# Check the toolbox itself, not the system Python. A half-finished setup
+# (window closed during the first install) leaves .venv without cryptography.
+if ! .venv/bin/python -c "import cryptography.hazmat.primitives.ciphers.aead" >/dev/null 2>&1; then
+  echo "Installing what the send script needs into the toolbox folder (.venv)."
   if ! .venv/bin/python -m pip install -r requirements.txt; then
-    rm -rf .venv
-    echo "Could not install what the send script needs. The unfinished toolbox folder was removed."
+    echo "Could not install it. Check your internet connection, then run this again."
+    echo "If it keeps failing, delete the .venv folder and run this again. Your feed.json is not touched."
     exit 1
   fi
 fi
