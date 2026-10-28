@@ -1213,12 +1213,16 @@
   // ArrowUp, ArrowDown, ArrowLeft, ArrowRight, and Enter. Chromium moves focus
   // by on-screen position. Enter activates the focused control, which fires click
   // on a real button. This page does not take over those arrow keys, except Up
-  // and Down on the transcript, and the draft Send path below. A draft's Send
-  // sits inside the scroller, so spatial navigation never lands on it.
+  // and Down on the transcript, the draft Send path below, and Right from the
+  // message field onto the green Send beside it. A draft's Send sits inside
+  // the scroller, so spatial navigation never lands on it.
   // Down at the bottom of the transcript focuses that Send, then Yes.
   // Up from Yes focuses that Send, then the transcript.
   // Left and Right inside the passphrase or message field move the text cursor.
-  // At either end of the text, spatial navigation would otherwise leave the field.
+  // At either end of the passphrase, and Left at the start of the message, the
+  // caret stays in the field. Right on the message, when the caret is already
+  // at the end or the field is empty, focuses #send-btn. Left from that Send
+  // returns to the message field.
   function visibleDraftSend() {
     const buttons = document.querySelectorAll('#convo .draft-send');
     for (let i = buttons.length - 1; i >= 0; i--) {
@@ -1230,6 +1234,10 @@
     const row = $('quick-replies');
     if (!row || row.hidden) return null;
     return row.querySelector('button');
+  }
+  function caretAtEnd(el) {
+    const a = el.selectionStart;
+    return a != null && a === el.selectionEnd && a === el.value.length;
   }
   function nudgeCaret(el, dir, shift) {
     const len = el.value.length;
@@ -1261,9 +1269,27 @@
     }
     if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
       const field = document.activeElement;
-      if (field && (field.id === 'pass' || field.id === 'msg') && typeof field.selectionStart === 'number') {
+      if (field && field.id === 'msg' && typeof field.selectionStart === 'number') {
+        // Right leaves only from a collapsed caret already at the end. A selection
+        // still collapses inside the field, and Shift+Right keeps extending it.
+        if (ev.key === 'ArrowRight' && !ev.shiftKey && caretAtEnd(field)) {
+          ev.preventDefault();
+          $('send-btn').focus();
+          return;
+        }
         ev.preventDefault();
         nudgeCaret(field, ev.key === 'ArrowLeft' ? -1 : 1, ev.shiftKey);
+        return;
+      }
+      if (field && field.id === 'pass' && typeof field.selectionStart === 'number') {
+        ev.preventDefault();
+        nudgeCaret(field, ev.key === 'ArrowLeft' ? -1 : 1, ev.shiftKey);
+        return;
+      }
+      if (ev.key === 'ArrowLeft' && !ev.shiftKey && field && field.id === 'send-btn') {
+        ev.preventDefault();
+        $('msg').focus();
+        return;
       }
       return;
     }
