@@ -4,7 +4,7 @@
   const CFG = window.CHIEF_CONFIG || {};
   const LS_PASS = 'chief.pass', LS_AUTO = 'chief.auto', LS_FEED = 'chief.feedCache';
   const LS_OUT = 'chief.outbox', LS_HEARD = 'chief.lastHeard', LS_SAVER = 'chief.saver';
-  const LS_SEEN_IDS = 'chief.seenIds';
+  const LS_SEEN_IDS = 'chief.seenIds', LS_CLEARED = 'chief.clearedKeys';
   const QS = new URLSearchParams(location.search);
   const showQuick = QS.get('replies') !== '0';   // on in the normal app; ?replies=0 hides them
   // Battery: the live channel (SSE) is the only network activity while healthy. The feed is polled only
@@ -374,7 +374,7 @@
     if (auto) speak(assistantName + ' says: ' + text);
     scrollEnd();
     // A new message puts the highlight back on its reply row, unless the wearer
-    // is typing or confirming Forget.
+    // is typing or a confirm dialog is open.
     const typing = document.activeElement && document.activeElement.matches && document.activeElement.matches('input, textarea');
     if (!confirmOpen && !aboutOpen && !typing) focusReplyRow();
   }
@@ -384,6 +384,8 @@
   let feedMsgs = [];                   // decrypted feed
   let live = [];                       // entries that arrived live but aren't in the fetched feed yet
   let outbox = getJSON(LS_OUT, []);    // [{id,t,armored,state}] wearer messages not yet in the feed
+  // Keys hidden by Clear chat. Not a clock: only messages already loaded at Clear.
+  let clearedKeys = new Set((getJSON(LS_CLEARED, []) || []).filter((x) => typeof x === 'string'));
   const outText = new Map();           // id -> plaintext (memory only)
   const outMeta = new Map();           // id -> {kind, draftId, draftHash} for approvals still in the outbox
   const hashCache = new Map();         // canonical draft string -> 12 hex
@@ -457,12 +459,21 @@
     const a = $('auto-btn'); a.textContent = 'Auto-read: ' + (auto ? 'On' : 'Off'); a.setAttribute('aria-pressed', String(auto));
     const v = $('saver-btn'); v.textContent = 'Saver: ' + (saver ? 'On' : 'Off'); v.setAttribute('aria-pressed', String(saver));
   }
-  // Newest assistant message by timestamp. The feed is oldest-first, so the
-  // first Chief message is not the latest. A tied timestamp keeps the later one.
+  // Bubble key shared by the transcript and Clear chat. Prefer the id.
+  function msgKey(m) {
+    return m && m.id ? 'i:' + m.id : 'c:' + (m && m.ct);
+  }
+  function hiddenByClear(m) {
+    if (!m || (!m.id && !m.ct)) return false;
+    return clearedKeys.has(msgKey(m));
+  }
+  // Newest assistant message by timestamp, skipping anything Clear chat hid.
+  // The feed is oldest-first, so the first Chief message is not the latest.
+  // A tied timestamp keeps the later one.
   function latestChief() {
     let best = null, bestT = -Infinity, bestI = -1;
     messages.forEach((m, i) => {
-      if (m.role !== 'chief') return;
+      if (m.role !== 'chief' || hiddenByClear(m)) return;
       const t = Date.parse(m.t) || 0;
       if (!best || t > bestT || (t === bestT && i > bestI)) { best = m; bestT = t; bestI = i; }
     });
@@ -521,11 +532,11 @@
       return !(outText.has(o.id) && owned.has(outText.get(o.id).trim()));
     });
     if (outbox.length !== before) saveOutbox();
-    const pend = outbox.filter((o) => outText.has(o.id)).map((o) => ({
+    const pend = outbox.filter((o) => outText.has(o.id) && !hiddenByClear(o)).map((o) => ({
       t: o.t, text: outText.get(o.id), role: 'owner', id: o.id, state: o.state, ...(outMeta.get(o.id) || {}),
     }));
     const time = (m) => Date.parse(m.t) || 0;
-    const list = [...pend, ...messages].map((m, i) => [m, i])
+    const list = [...pend, ...messages.filter((m) => !hiddenByClear(m))].map((m, i) => [m, i])
       // Newest time first. A tied time keeps feed order: the later entry is newer.
       .sort((a, b) => (time(b[0]) - time(a[0])) || (b[1] - a[1]))
       .slice(0, MAX_SHOWN).map(([m]) => m).reverse();
@@ -535,7 +546,7 @@
     rendered.clear();
     let added = false, prev = null;
     for (const m of list) {
-      const key = m.id ? 'i:' + m.id : 'c:' + m.ct;
+      const key = msgKey(m);
       keep.add(key);
       rendered.set(key, m);
       const draft = isDraft(m);
@@ -636,9 +647,9 @@
   function placeQuick() {
     const row = $('quick-replies');
     if (!row) return;
-    // The row stays up if any assistant message exists, even when that
-    // message has scrolled out of the last 20 shown.
-    const show = showQuick && messages.some((m) => m.role === 'chief');
+    // The row stays up if any assistant message is still showing, even when that
+    // message has scrolled out of the last 20. Cleared messages do not count.
+    const show = showQuick && messages.some((m) => m.role === 'chief' && !hiddenByClear(m));
     row.hidden = !show;
   }
   // Highlight the first quick reply and scroll it into view. Returns false when
@@ -1111,44 +1122,93 @@
   $('about-btn').addEventListener('click', openAbout);
   $('about-back').addEventListener('click', () => closeAbout(false));
   $('banner').addEventListener('click', () => { $('banner').hidden = true; document.body.classList.remove('new'); const m = latestChief(); if (m) speak(spoken(m)); });
-  // Forget is two steps. The first tap only opens this prompt; Cancel is the focused choice.
+  // Clear chat and Forget each ask first. Cancel is the focused choice.
+  // Clear hides messages already loaded on this device (feed, live, and sent
+  // outbox rows). It does not use the clock, so a feed item that was not loaded
+  // yet still shows on the next poll. Sending and failed outbox rows stay put,
+  // with their text, and are never dropped. Forget still signs out.
   let confirmOpen = false;
+  let confirmKind = '';
   function setCovered(on) {
     confirmOpen = on;
+    if (!on) confirmKind = '';
     $('confirm').hidden = !on;
     $('feed').inert = on;
     $('lock').inert = on;
   }
-  function askForget() {
+  function askConfirm(kind) {
     if (confirmOpen) return;
+    if (kind === 'clear' && (aboutOpen || $('feed').hidden)) return;
+    confirmKind = kind;
+    const clearing = kind === 'clear';
+    $('confirm-text').textContent = clearing
+      ? 'Clear chat? Hides messages on this device. Passphrase stays.'
+      : 'Forget key? This signs you out of Chief.';
+    const go = $('confirm-forget');
+    go.textContent = clearing ? 'Clear' : 'Forget';
+    go.setAttribute('aria-label', clearing ? 'Clear chat' : 'Forget passphrase');
     setCovered(true);
-    try { history.pushState({ chief: 'confirm-forget' }, ''); } catch { /* ignore */ }
+    try { history.pushState({ chief: clearing ? 'confirm-clear' : 'confirm-forget' }, ''); } catch { /* ignore */ }
     $('confirm-cancel').focus();
   }
-  function cancelForget(fromPop) {
+  function cancelConfirm(fromPop) {
     if (!confirmOpen) return;
+    const kind = confirmKind;
+    const state = history.state && history.state.chief;
     setCovered(false);
-    if (!fromPop && history.state && history.state.chief === 'confirm-forget') history.back();
-    if (unlocked()) $('forget-btn').focus();
+    if (!fromPop && (state === 'confirm-clear' || state === 'confirm-forget')) history.back();
+    if (!unlocked()) return;
+    $(kind === 'clear' ? 'clear-btn' : 'forget-btn').focus();
+  }
+  function snapshotClearKeys() {
+    const add = (m) => {
+      if (!m || (!m.id && !m.ct)) return;
+      clearedKeys.add(msgKey(m));
+    };
+    feedMsgs.forEach(add);
+    live.forEach(add);
+    for (const o of outbox) if (o && o.state === 'sent') add(o);
+    store.set(LS_CLEARED, JSON.stringify([...clearedKeys]));
+  }
+  function commitClear() {
+    if (!confirmOpen || confirmKind !== 'clear') return;
+    const drop = !!(history.state && history.state.chief === 'confirm-clear');
+    setCovered(false);
+    if (drop) history.back();
+    // Seen ids stay across Clear. Only messages already loaded are hidden.
+    snapshotClearKeys();
+    if (canSpeak()) speechSynthesis.cancel();
+    $('banner').hidden = true;
+    document.body.classList.remove('new');
+    clearTimeout(bannerTimer);
+    showError('');
+    setStatus('', '');
+    render();
+    if (unlocked()) focusPrimary();
   }
   function commitForget() {
-    if (!confirmOpen) return;   // a single tap on the feed's Forget button never reaches here
+    if (!confirmOpen || confirmKind !== 'forget') return;   // a single tap on the feed's Forget button never reaches here
     const drop = !!(history.state && history.state.chief === 'confirm-forget');
     setCovered(false);
     if (drop) history.back();
-    for (const k of [LS_PASS, LS_FEED, LS_OUT, LS_HEARD]) store.del(k);
+    for (const k of [LS_PASS, LS_FEED, LS_OUT, LS_HEARD, LS_CLEARED]) store.del(k);
     // Seen ids stay, so an old copied message still will not pop up.
     idb.clear();
     sleep();
+    clearedKeys = new Set();
     keyRec = null; messages = []; feedMsgs = []; live = []; outbox = []; outText.clear(); outMeta.clear(); hashCache.clear(); feedText = null; feedSalt = null; waitUntil = 0; lastHeard = '';
     if (canSpeak()) speechSynthesis.cancel();
     render(); setStatus('', '');
     showLock('Passphrase forgotten.');
     $('pass').focus();
   }
-  $('forget-btn').addEventListener('click', askForget);
-  $('confirm-cancel').addEventListener('click', () => cancelForget(false));
-  $('confirm-forget').addEventListener('click', commitForget);
+  $('clear-btn').addEventListener('click', () => askConfirm('clear'));
+  $('forget-btn').addEventListener('click', () => askConfirm('forget'));
+  $('confirm-cancel').addEventListener('click', () => cancelConfirm(false));
+  $('confirm-forget').addEventListener('click', () => {
+    if (confirmKind === 'clear') commitClear();
+    else if (confirmKind === 'forget') commitForget();
+  });
   // Meta Ray-Ban Display delivers touchpad and Neural Band input as keydown:
   // ArrowUp, ArrowDown, ArrowLeft, ArrowRight, and Enter. Chromium moves focus
   // by on-screen position. Enter activates the focused control, which fires click
@@ -1196,7 +1256,7 @@
       if (aboutOpen) { ev.preventDefault(); closeAbout(false); return; }
       if (!confirmOpen) return;
       ev.preventDefault();
-      cancelForget(false);
+      cancelConfirm(false);
       return;
     }
     if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && !ev.altKey && !ev.ctrlKey && !ev.metaKey) {
@@ -1256,12 +1316,13 @@
   });
   window.addEventListener('popstate', () => {
     if (aboutOpen) closeAbout(true);
-    else if (confirmOpen) cancelForget(true);
+    else if (confirmOpen) cancelConfirm(true);
   });
   // Any interaction wakes the app (cheap no-op when already awake: just re-arms one timeout).
   for (const ev of ['pointerdown', 'keydown', 'focus']) window.addEventListener(ev, wake, { passive: true, capture: true });
   // Hide, freeze, and pagehide all mean the glasses left this page. Stop radios and speech.
-  // The saved passphrase, key, and feed cache stay so the next open shows the chat again.
+  // The saved passphrase, key, feed cache, and Clear chat keys stay so the next
+  // open shows the chat again, still hiding anything already cleared on this device.
   function shutdown() {
     sleep();
     clearTimeout(bannerTimer);
@@ -1283,7 +1344,7 @@
   // Glasses Back exits only when nothing is left to go back to, and the first
   // such Back opens the system menu (Resume). Do not push an entry here.
   // A leftover forget prompt or About screen is dropped so it cannot add a permanent extra step.
-  if (history.state && (history.state.chief === 'confirm-forget' || history.state.chief === 'about') && history.length > 1) history.back();
+  if (history.state && (history.state.chief === 'confirm-forget' || history.state.chief === 'confirm-clear' || history.state.chief === 'about') && history.length > 1) history.back();
   else if (!history.state || history.state.chief !== 'root') history.replaceState({ chief: 'root' }, '');
   start();
 })();

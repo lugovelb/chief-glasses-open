@@ -24,6 +24,10 @@ Nothing to install. The letters stay hidden. Click **Show** if you want to check
 
 ![Forget asks again. Cancel is the highlighted choice.](docs/screenshots/forget.png)
 
+![Clear chat asks again. Cancel is the highlighted choice, and the passphrase stays.](docs/screenshots/clear-confirm.png)
+
+![After Clear chat, this device has no messages. Chief stays unlocked.](docs/screenshots/clear-empty.png)
+
 ![A drafted email with To, Subject, body, and a green Send under that draft.](docs/screenshots/draft.png)
 
 ![After that Send, the bubble says Approved and shows the draft id.](docs/screenshots/draft-approved.png)
@@ -83,15 +87,15 @@ This uses Meta's developer preview. The taps change. Chief is not an official Me
 1. Turn on Developer Mode using only this section: [Enabling Developer Mode in the Meta AI app](https://wearables.developer.meta.com/docs/develop/webapps/setup/#enabling-developer-mode-in-the-meta-ai-app).
 2. Add the page by its address using only this section: [Load the Web App on your glasses](https://wearables.developer.meta.com/docs/develop/webapps/test/#load-the-web-app-on-your-glasses).
 3. Use the `https://` address from Pages. Do not use `http://` or `127.0.0.1`.
-4. On the glasses, open Chief and type your passphrase. The reply buttons (Yes, No, Later, Tell me more) sit under the chat and above the message box. Swipe up into the chat to read older messages, then swipe down to the buttons. When a drafted email is showing, Down at the bottom of the transcript highlights that draft's **Send**, and Down again highlights **Yes**. Up from **Yes** returns to that **Send**, then the transcript. Swipe back to the buttons from the message box or Forget. Pinch or Select sends the highlighted one. Select a message to jump back to Yes.
+4. On the glasses, open Chief and type your passphrase. The reply buttons (Yes, No, Later, Tell me more) sit under the chat and above the message box. Swipe up into the chat to read older messages, then swipe down to the buttons. When a drafted email is showing, Down at the bottom of the transcript highlights that draft's **Send**, and Down again highlights **Yes**. Up from **Yes** returns to that **Send**, then the transcript. Swipe back to the buttons from the message box, Clear chat, or Forget. Pinch or Select sends the highlighted one. Select a message to jump back to Yes.
 
-**About** is with **Read aloud**, **Refresh**, and **Auto-read**. **Forget passphrase** is on its own row under those. **Saver** is the quiet control in the header, next to the clock. **Back** on the About screen returns to the chat. The glasses' back control does the same.
+**About** is with **Read aloud**, **Refresh**, and **Auto-read**. **Clear chat** is a wide quiet row under those. **Forget passphrase** is the wide quiet row under Clear chat. **Saver** is the quiet control in the header, next to the clock. **Back** on the About screen returns to the chat. The glasses' back control does the same.
 
 A drafted email is drawn with its real **To**, **Subject**, and body. One green **Send** sits under that draft only. The **Send** beside the message box is still how you talk to your assistant.
 
 ![The Yes button highlighted. Swipe moves to No, Later, and Tell me more.](docs/screenshots/quick-reply-focus.png)
 
-**Forget** asks a second time. **Cancel** is the highlighted choice. Confirming Forget removes the passphrase from this device only. Closing the page with the glasses' back control keeps the chat for next time.
+**Clear chat** asks a second time. **Cancel** is the highlighted choice. Confirming it hides the messages already loaded on this device. The passphrase stays, and the chat stays unlocked. A message that is still sending, or that failed to send, stays on screen. A reply that was not loaded yet, or that arrives later, still shows on Refresh. **Forget** asks a second time. **Cancel** is the highlighted choice. Confirming Forget removes the passphrase from this device only. Closing the page with the glasses' back control keeps the chat for next time.
 
 Quick replies are on unless you add `?replies=0` to the address.
 
@@ -131,7 +135,7 @@ The stored `text` is only a fallback for an older page. This page ignores it on 
 - Use six or more random words. The scrambled file is public, so a short phrase can be guessed.
 - The demo passphrase is public. Do not reuse it.
 - Messages are scrambled with AES-256-GCM. The passphrase is stretched with PBKDF2-SHA256 for 310,000 iterations.
-- Chief remembers the passphrase on this device. It is stored in the browser's local storage on that device. **Forget** clears it from this device. It does not delete the public file.
+- Chief remembers the passphrase on this device. It is stored in the browser's local storage on that device. **Clear chat** hides messages already on this device and keeps the passphrase. **Forget** clears the passphrase from this device. Neither one deletes the public file.
 - The Web3Forms key, the FormSubmit id, and the ntfy name are not the passphrase. They are public on purpose. Someone with the Web3Forms key can email your inbox. They still cannot read the feed.
 - Do not put your email address in `config.js`. Do not commit the passphrase.
 
