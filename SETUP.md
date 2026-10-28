@@ -121,7 +121,7 @@ git push
 
 If you see the cryptography message, run the pip line again with the `.venv` still active, or just run send-message again.
 
-`--new` removes the sample after saving `feed.backup-<timestamp>.json`. Later replies use the same publish command **without** `--new`, then commit and push `feed.json` again. Set `CHIEF_PASSPHRASE` with the `export` line above first. `publish.py` reads that and does not print it. Do not commit the passphrase.
+`--new` removes the sample after saving `feed.backup-<timestamp>.json`. Later replies use the same publish command **without** `--new`, then commit and push `feed.json` again. Set `CHIEF_PASSPHRASE` first: on Windows, the `$env:CHIEF_PASSPHRASE` line above; on Mac or Linux, the `export` line. `publish.py` reads that and does not print it. Do not commit the passphrase.
 
 The file keeps the newest 20 messages.
 
