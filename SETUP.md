@@ -250,6 +250,8 @@ Use your `https://` Pages address and the passphrase you publish with.
 
 **How do I hide Yes / No / Later / Tell me more?** Add `?replies=0` to the address. The green Send under a drafted email stays. That Send is the approval for that draft, not a chat reply.
 
+**How do I use Spanish?** Add `?lang=es` to the address, or tap English / Español under Unlock on the lock screen. Chief remembers the choice on this device. `?lang=en` switches back.
+
 **What approves a drafted email?** Only an owner message with kind `send_draft`, the same `draftId`, and the `draftHash` of the current To, Subject, and body. The text of that message is `SEND_DRAFT`, the id, and the hash. See the Draft email section above. Typing Yes, or the words SEND_DRAFT, does not send the email. A `send_draft` from the assistant does not either.
 
 **Where is About?** With Read aloud, Refresh, and Auto-read. Clear chat is on its own row under those, and Forget passphrase is on the row under Clear chat. Saver is in the header. Help and setup on that screen point at this public template: https://github.com/lugovelb/chief-glasses-open.

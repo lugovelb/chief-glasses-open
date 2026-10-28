@@ -99,6 +99,8 @@ A drafted email is drawn with its real **To**, **Subject**, and body. One green 
 
 Quick replies are on unless you add `?replies=0` to the address.
 
+Spanish is available. Add `?lang=es` to the address, or tap **English** / **Español** under Unlock on the lock screen. Chief remembers the choice on this device. `?lang=en` switches back.
+
 ## Draft email
 
 When your assistant publishes a drafted email, the bubble shows **To**, **Subject**, and the body. Chief does not show the free-form `text` on that message, so the line on the glasses is the email you would approve.
