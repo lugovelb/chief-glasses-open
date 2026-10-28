@@ -1,0 +1,110 @@
+'use strict';
+// English chrome. Message text from the feed is not in this pack.
+(function (root) {
+  root.CHIEF_I18N = root.CHIEF_I18N || {};
+  root.CHIEF_I18N.en = {
+    'meta.description': 'Chief: encrypted replies from your assistant, on your glasses.',
+
+    'lock.passphrase': 'Passphrase',
+    'lock.placeholder': 'Write or speak passphrase',
+    'lock.show': 'Show',
+    'lock.hide': 'Hide',
+    'lock.showAria': 'Show passphrase',
+    'lock.hideAria': 'Hide passphrase',
+    'lock.unlock': 'Unlock',
+    'lock.needPass': 'Enter your passphrase.',
+    'lock.unlocking': 'Unlocking…',
+    'lock.forgotten': 'Passphrase forgotten.',
+    'lock.loadFail': 'Could not load messages. Check your connection.',
+    'lock.empty': 'No messages yet. Try again later.',
+    'lock.badPass': 'Could not decrypt. Wrong passphrase?',
+    'lock.badFeed': 'Message feed is damaged. Try again.',
+
+    'saver.aria': 'Battery saver',
+    'saver.on': 'Saver: On',
+    'saver.off': 'Saver: Off',
+
+    'banner.new': 'New reply from {name}',
+    'scroll.aria': 'Messages',
+    'empty': 'No messages yet.',
+    'quick.aria': 'Quick replies',
+    'quick.yes': 'Yes',
+    'quick.no': 'No',
+    'quick.later': 'Later',
+    'quick.more': 'Tell me more',
+
+    'compose.placeholder': 'Message {name}',
+    'compose.aria': 'Message to {name}',
+    'compose.send': 'Send',
+    'controls.aria': 'Controls',
+
+    'read.btn': 'Read aloud',
+    'refresh.btn': 'Refresh',
+    'auto.on': 'Auto-read: On',
+    'auto.off': 'Auto-read: Off',
+    'about.btn': 'About',
+    'clear.btn': 'Clear chat',
+    'forget.btn': 'Forget passphrase',
+
+    'about.title': 'About Chief',
+    'about.version': 'Version 1.2 - Oct 26 2026',
+    'about.body': 'Encrypted chat with your assistant on glasses or any browser.',
+    'about.help': 'Help and setup:',
+    'about.back': 'Back',
+
+    'confirm.forgetText': 'Forget key? This signs you out of Chief.',
+    'confirm.clearText': 'Clear chat? Hides messages on this device. Passphrase stays.',
+    'confirm.cancel': 'Cancel',
+    'confirm.forget': 'Forget',
+    'confirm.clear': 'Clear',
+    'confirm.forgetAria': 'Forget passphrase',
+    'confirm.clearAria': 'Clear chat',
+
+    'lang.group': 'Language',
+
+    'error.noSpeech': 'Read aloud is not available here.',
+    'error.speechFail': 'Could not read aloud.',
+    'error.offline': 'Offline. Check your phone connection.',
+    'error.loadRefresh': 'Could not load messages. Try Refresh.',
+    'error.keyChanged': 'Could not decrypt. The key changed? Use Forget passphrase.',
+    'error.badFeed': 'Message feed is damaged. Try Refresh.',
+
+    'status.offline': 'Offline · {time}',
+    'status.checked': 'Checked {time}',
+    'status.live': 'Live {time}',
+    'status.reconnecting': 'Reconnecting…',
+    'status.paused': 'Paused to save battery · tap to update',
+    'status.updating': 'Updating…',
+    'status.checking': 'Checking…',
+    'status.notSent': 'Not sent. Tap the red message to retry.',
+    'status.waiting': 'Sent ✓ Waiting for {name}…',
+    'status.notSetup': 'Sending is not set up. For email, set config.js line 9 (web3formsKey) or line 14 (formsubmitId). For ntfy, set line 19 (ntfyTopic).',
+    'status.notReady': 'Not ready yet. Tap Refresh, then try again.',
+    'status.sending': 'Sending in the background…',
+    'status.retrying': 'Retrying in the background…',
+    'status.needText': 'Type or speak a message first.',
+    'status.replied': '{name} replied ✓',
+
+    'mark.sending': ' · sending…',
+    'mark.sent': ' · sent ✓',
+    'mark.failed': ' · not sent, tap to retry',
+
+    'bubble.you': 'You · ',
+    'bubble.approvedMark': 'Approved ✓',
+    'bubble.retry': 'Retry sending',
+    'bubble.showReplies': 'Show quick replies',
+
+    'draft.to': 'To: ',
+    'draft.subject': 'Subject: ',
+    'draft.send': 'Send draft',
+    'draft.sendTo': 'Send draft to {to}',
+    'draft.email': 'Draft email',
+    'draft.emailTo': 'Draft email to {to}',
+    'draft.retryApproval': 'Retry sending approval',
+    'draft.approvedId': 'Approved {id}',
+
+    'speech.says': '{name} says: {text}',
+    'speech.draft': 'To {to}. Subject {subject}. {body}',
+    'speech.approved': 'Approved.',
+  };
+})(typeof window !== 'undefined' ? window : globalThis);

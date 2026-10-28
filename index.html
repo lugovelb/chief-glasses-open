@@ -13,21 +13,27 @@
   <link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="apple-touch-icon.png" sizes="180x180">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=13">
+  <script defer src="lang/en.js?v=13"></script>
+  <script defer src="lang/es.js?v=13"></script>
   <script defer src="config.js?v=3"></script>
-  <script defer src="app.js?v=12"></script>
+  <script defer src="app.js?v=13"></script>
 </head>
 <body>
   <div id="app" class="app-shell">
     <section id="lock" class="screen" hidden>
       <h1 class="brand"><img src="logo-64.png" alt="" class="logo" width="32" height="32"> Chief</h1>
       <form id="unlock-form" class="unlock" autocomplete="off">
-        <label for="pass">Passphrase</label>
+        <label for="pass" data-i18n="lock.passphrase">Passphrase</label>
         <div class="pass-row">
-          <input id="pass" type="password" class="secret focusable" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Write or speak passphrase">
+          <input id="pass" type="password" class="secret focusable" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-placeholder="lock.placeholder" placeholder="Write or speak passphrase">
           <button type="button" id="pass-toggle" class="quiet focusable" aria-pressed="false" aria-label="Show passphrase">Show</button>
         </div>
-        <button type="submit" id="unlock-btn" class="focusable">Unlock</button>
+        <button type="submit" id="unlock-btn" class="focusable" data-i18n="lock.unlock">Unlock</button>
+        <div class="lang-pills" role="group" data-i18n-aria="lang.group" aria-label="Language">
+          <button type="button" id="lang-en" class="lang-pill quiet focusable" data-lang="en" aria-pressed="true">English</button>
+          <button type="button" id="lang-es" class="lang-pill quiet focusable" data-lang="es" aria-pressed="false">Español</button>
+        </div>
       </form>
       <p id="lock-status" class="status" role="status" aria-live="polite"></p>
     </section>
@@ -36,55 +42,56 @@
       <header class="top">
         <span class="brand small"><img src="logo-64.png" alt="" class="logo" width="32" height="32"> Chief</span>
         <span class="top-side">
-          <button type="button" id="saver-btn" class="quiet header-saver focusable" aria-pressed="true" aria-label="Battery saver">Saver: On</button>
+          <button type="button" id="saver-btn" class="quiet header-saver focusable" aria-pressed="true" data-i18n-aria="saver.aria" aria-label="Battery saver">Saver: On</button>
           <span id="checked" class="checked" aria-live="polite"></span>
         </span>
       </header>
       <button type="button" id="banner" class="banner focusable" role="alert" hidden>New reply</button>
       <p id="error" class="error" role="alert" hidden></p>
-      <div id="scroll" class="scroll focusable" tabindex="0" role="region" aria-label="Messages">
-        <p id="empty" class="empty">No messages yet.</p>
+      <div id="scroll" class="scroll focusable" tabindex="0" role="region" data-i18n-aria="scroll.aria" aria-label="Messages">
+        <p id="empty" class="empty" data-i18n="empty">No messages yet.</p>
         <ol id="convo" class="convo" aria-live="polite"></ol>
       </div>
-      <!-- Outside the scrolling transcript so directional focus can leave and return. -->
-      <div id="quick-replies" class="quick-replies" role="group" aria-label="Quick replies">
-        <button type="button" data-text="Yes">Yes</button>
-        <button type="button" data-text="No">No</button>
-        <button type="button" data-text="Later">Later</button>
-        <button type="button" data-text="Tell me more">Tell me more</button>
+      <!-- Outside the scrolling transcript so directional focus can leave and return.
+           data-text stays English: it is the message sent to the assistant, not a label. -->
+      <div id="quick-replies" class="quick-replies" role="group" data-i18n-aria="quick.aria" aria-label="Quick replies">
+        <button type="button" data-text="Yes" data-i18n="quick.yes">Yes</button>
+        <button type="button" data-text="No" data-i18n="quick.no">No</button>
+        <button type="button" data-text="Later" data-i18n="quick.later">Later</button>
+        <button type="button" data-text="Tell me more" data-i18n="quick.more">Tell me more</button>
       </div>
       <form id="compose" class="compose" autocomplete="off">
         <input id="msg" type="text" class="focusable" enterkeyhint="send" autocomplete="off" maxlength="2000" placeholder="Message" aria-label="Message">
-        <button type="submit" id="send-btn" class="send focusable">Send</button>
+        <button type="submit" id="send-btn" class="send focusable" data-i18n="compose.send">Send</button>
       </form>
       <p id="send-status" class="send-status" role="status" aria-live="polite"></p>
-      <nav class="controls" aria-label="Controls">
+      <nav class="controls" data-i18n-aria="controls.aria" aria-label="Controls">
         <div class="control-row">
-          <button type="button" id="read-btn" class="focusable">Read aloud</button>
-          <button type="button" id="refresh-btn" class="focusable">Refresh</button>
+          <button type="button" id="read-btn" class="focusable" data-i18n="read.btn">Read aloud</button>
+          <button type="button" id="refresh-btn" class="focusable" data-i18n="refresh.btn">Refresh</button>
           <button type="button" id="auto-btn" class="focusable" aria-pressed="true">Auto-read: On</button>
-          <button type="button" id="about-btn" class="focusable">About</button>
+          <button type="button" id="about-btn" class="focusable" data-i18n="about.btn">About</button>
         </div>
-        <button type="button" id="clear-btn" class="quiet clear-row focusable">Clear chat</button>
-        <button type="button" id="forget-btn" class="quiet forget-row focusable" aria-label="Forget passphrase">Forget passphrase</button>
+        <button type="button" id="clear-btn" class="quiet clear-row focusable" data-i18n="clear.btn">Clear chat</button>
+        <button type="button" id="forget-btn" class="quiet forget-row focusable" data-i18n="forget.btn" data-i18n-aria="forget.btn" aria-label="Forget passphrase">Forget passphrase</button>
       </nav>
     </section>
 
     <section id="about" class="screen about" hidden>
-      <h1>About Chief</h1>
-      <p class="about-version">Version 1.2 - Oct 26 2026</p>
-      <p>Encrypted chat with your assistant on glasses or any browser.</p>
-      <p class="about-help">Help and setup:<br>
+      <h1 data-i18n="about.title">About Chief</h1>
+      <p class="about-version" data-i18n="about.version">Version 1.2 - Oct 26 2026</p>
+      <p data-i18n="about.body">Encrypted chat with your assistant on glasses or any browser.</p>
+      <p class="about-help"><span data-i18n="about.help">Help and setup:</span><br>
         <a id="about-link" class="about-link focusable" href="https://github.com/lugovelb/chief-glasses-open">github.com/lugovelb/chief-glasses-open</a>
       </p>
-      <button type="button" id="about-back" class="about-back focusable">Back</button>
+      <button type="button" id="about-back" class="about-back focusable" data-i18n="about.back">Back</button>
     </section>
 
     <div id="confirm" class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text" hidden>
-      <p id="confirm-text">Forget key? This signs you out of Chief.</p>
+      <p id="confirm-text" data-i18n="confirm.forgetText">Forget key? This signs you out of Chief.</p>
       <div class="confirm-actions">
-        <button type="button" id="confirm-cancel" class="choice focusable">Cancel</button>
-        <button type="button" id="confirm-forget" class="quiet focusable">Forget</button>
+        <button type="button" id="confirm-cancel" class="choice focusable" data-i18n="confirm.cancel">Cancel</button>
+        <button type="button" id="confirm-forget" class="quiet focusable" data-i18n="confirm.forget" data-i18n-aria="confirm.forgetAria" aria-label="Forget passphrase">Forget</button>
       </div>
     </div>
   </div>

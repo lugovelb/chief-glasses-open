@@ -1,0 +1,110 @@
+'use strict';
+// Spanish chrome (neutral Latin American). Feed text is not translated.
+(function (root) {
+  root.CHIEF_I18N = root.CHIEF_I18N || {};
+  root.CHIEF_I18N.es = {
+    'meta.description': 'Chief: respuestas cifradas de tu asistente, en tus lentes.',
+
+    'lock.passphrase': 'Frase secreta',
+    'lock.placeholder': 'Escribe o di la frase secreta',
+    'lock.show': 'Mostrar',
+    'lock.hide': 'Ocultar',
+    'lock.showAria': 'Mostrar frase secreta',
+    'lock.hideAria': 'Ocultar frase secreta',
+    'lock.unlock': 'Desbloquear',
+    'lock.needPass': 'Escribe tu frase secreta.',
+    'lock.unlocking': 'Desbloqueando…',
+    'lock.forgotten': 'Frase secreta olvidada.',
+    'lock.loadFail': 'No se pudieron cargar los mensajes. Revisa tu conexión.',
+    'lock.empty': 'Todavía no hay mensajes. Inténtalo más tarde.',
+    'lock.badPass': 'No se pudo descifrar. ¿Frase secreta incorrecta?',
+    'lock.badFeed': 'El archivo de mensajes está dañado. Inténtalo de nuevo.',
+
+    'saver.aria': 'Ahorro de batería',
+    'saver.on': 'Ahorro: activo',
+    'saver.off': 'Ahorro: apagado',
+
+    'banner.new': 'Nueva respuesta de {name}',
+    'scroll.aria': 'Mensajes',
+    'empty': 'Todavía no hay mensajes.',
+    'quick.aria': 'Respuestas rápidas',
+    'quick.yes': 'Sí',
+    'quick.no': 'No',
+    'quick.later': 'Luego',
+    'quick.more': 'Cuéntame más',
+
+    'compose.placeholder': 'Mensaje para {name}',
+    'compose.aria': 'Mensaje para {name}',
+    'compose.send': 'Enviar',
+    'controls.aria': 'Controles',
+
+    'read.btn': 'Leer en voz alta',
+    'refresh.btn': 'Actualizar',
+    'auto.on': 'Lectura auto: sí',
+    'auto.off': 'Lectura auto: no',
+    'about.btn': 'Acerca de',
+    'clear.btn': 'Borrar chat',
+    'forget.btn': 'Olvidar frase secreta',
+
+    'about.title': 'Acerca de Chief',
+    'about.version': 'Versión 1.2 — 26 oct 2026',
+    'about.body': 'Chat cifrado con tu asistente, en los lentes o en cualquier navegador.',
+    'about.help': 'Ayuda y configuración:',
+    'about.back': 'Volver',
+
+    'confirm.forgetText': '¿Olvidar la clave? Se cierra tu sesión en Chief.',
+    'confirm.clearText': '¿Borrar el chat? Oculta los mensajes en este dispositivo. La frase secreta se queda.',
+    'confirm.cancel': 'Cancelar',
+    'confirm.forget': 'Olvidar',
+    'confirm.clear': 'Borrar',
+    'confirm.forgetAria': 'Olvidar frase secreta',
+    'confirm.clearAria': 'Borrar chat',
+
+    'lang.group': 'Idioma',
+
+    'error.noSpeech': 'Leer en voz alta no está disponible aquí.',
+    'error.speechFail': 'No se pudo leer en voz alta.',
+    'error.offline': 'Sin conexión. Revisa la conexión del teléfono.',
+    'error.loadRefresh': 'No se pudieron cargar los mensajes. Prueba Actualizar.',
+    'error.keyChanged': 'No se pudo descifrar. ¿Cambió la clave? Usa Olvidar frase secreta.',
+    'error.badFeed': 'El archivo de mensajes está dañado. Prueba Actualizar.',
+
+    'status.offline': 'Sin conexión · {time}',
+    'status.checked': 'Revisado {time}',
+    'status.live': 'En vivo {time}',
+    'status.reconnecting': 'Reconectando…',
+    'status.paused': 'En pausa para ahorrar batería · toca para actualizar',
+    'status.updating': 'Actualizando…',
+    'status.checking': 'Revisando…',
+    'status.notSent': 'No se envió. Toca el mensaje rojo para reintentar.',
+    'status.waiting': 'Enviado ✓ Esperando a {name}…',
+    'status.notSetup': 'El envío no está configurado. Para correo, define la línea 9 de config.js (web3formsKey) o la línea 14 (formsubmitId). Para ntfy, define la línea 19 (ntfyTopic).',
+    'status.notReady': 'Todavía no está listo. Toca Actualizar e inténtalo de nuevo.',
+    'status.sending': 'Enviando en segundo plano…',
+    'status.retrying': 'Reintentando en segundo plano…',
+    'status.needText': 'Escribe o di un mensaje primero.',
+    'status.replied': '{name} respondió ✓',
+
+    'mark.sending': ' · enviando…',
+    'mark.sent': ' · enviado ✓',
+    'mark.failed': ' · no enviado, toca para reintentar',
+
+    'bubble.you': 'Tú · ',
+    'bubble.approvedMark': 'Aprobado ✓',
+    'bubble.retry': 'Reintentar envío',
+    'bubble.showReplies': 'Mostrar respuestas rápidas',
+
+    'draft.to': 'Para: ',
+    'draft.subject': 'Asunto: ',
+    'draft.send': 'Enviar borrador',
+    'draft.sendTo': 'Enviar borrador a {to}',
+    'draft.email': 'Correo en borrador',
+    'draft.emailTo': 'Correo en borrador para {to}',
+    'draft.retryApproval': 'Reintentar el envío de la aprobación',
+    'draft.approvedId': 'Aprobado {id}',
+
+    'speech.says': '{name} dice: {text}',
+    'speech.draft': 'Para {to}. Asunto {subject}. {body}',
+    'speech.approved': 'Aprobado.',
+  };
+})(typeof window !== 'undefined' ? window : globalThis);

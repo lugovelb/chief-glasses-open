@@ -4,7 +4,7 @@
   const CFG = window.CHIEF_CONFIG || {};
   const LS_PASS = 'chief.pass', LS_AUTO = 'chief.auto', LS_FEED = 'chief.feedCache';
   const LS_OUT = 'chief.outbox', LS_HEARD = 'chief.lastHeard', LS_SAVER = 'chief.saver';
-  const LS_SEEN_IDS = 'chief.seenIds', LS_CLEARED = 'chief.clearedKeys';
+  const LS_SEEN_IDS = 'chief.seenIds', LS_CLEARED = 'chief.clearedKeys', LS_LANG = 'chief.lang';
   const QS = new URLSearchParams(location.search);
   const showQuick = QS.get('replies') !== '0';   // on in the normal app; ?replies=0 hides them
   // Battery: the live channel (SSE) is the only network activity while healthy. The feed is polled only
@@ -100,6 +100,54 @@
     del(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
   };
   const getJSON = (k, d) => { try { return JSON.parse(store.get(k)) ?? d; } catch { return d; } };
+
+  // Chrome strings live in lang/en.js and lang/es.js. Feed text is never passed through t().
+  // Priority: ?lang= wins and is stored, then chief.lang, then the first browser language.
+  function normLang(value) {
+    const s = String(value || '').trim().toLowerCase();
+    if (s === 'en' || s.startsWith('en-') || s.startsWith('en_')) return 'en';
+    if (s === 'es' || s.startsWith('es-') || s.startsWith('es_')) return 'es';
+    return '';
+  }
+  function chooseLang() {
+    const fromQuery = normLang(QS.get('lang'));
+    if (fromQuery) {
+      store.set(LS_LANG, fromQuery);
+      return fromQuery;
+    }
+    const stored = normLang(store.get(LS_LANG));
+    if (stored) return stored;
+    const tag = (navigator.languages && navigator.languages.length && navigator.languages[0]) || navigator.language || '';
+    return normLang(tag) === 'es' ? 'es' : 'en';
+  }
+  let lang = chooseLang();
+  function t(key, vars) {
+    const packs = window.CHIEF_I18N || {};
+    const pack = packs[lang] || {};
+    const en = packs.en || {};
+    let s = Object.prototype.hasOwnProperty.call(pack, key) ? pack[key] : en[key];
+    if (s == null) s = key;
+    if (vars) s = String(s).replace(/\{(\w+)\}/g, (_, name) => (vars[name] != null ? String(vars[name]) : ''));
+    return s;
+  }
+  function writeLangQuery() {
+    try {
+      const url = new URL(location.href);
+      url.searchParams.set('lang', lang);
+      const next = url.pathname + url.search + url.hash;
+      const cur = location.pathname + location.search + location.hash;
+      if (next !== cur) history.replaceState(history.state, '', next);
+    } catch { /* ignore */ }
+  }
+  function setLang(next) {
+    const n = normLang(next);
+    if (!n || n === lang) return;
+    lang = n;
+    store.set(LS_LANG, n);
+    writeLangQuery();
+    refreshFormatters();
+    applyChrome();
+  }
 
   // ---------- key: derive once, keep a non-extractable CryptoKey in IndexedDB ----------
   const idb = {
@@ -270,9 +318,9 @@
     if (!m) return '';
     if (isDraft(m)) {
       const f = draftFields(m);
-      return 'To ' + f.to + '. Subject ' + f.subject + '. ' + f.body;
+      return t('speech.draft', { to: f.to, subject: f.subject, body: f.body });
     }
-    if (m.role === 'owner' && m.kind === 'send_draft') return 'Approved.';
+    if (m.role === 'owner' && m.kind === 'send_draft') return t('speech.approved');
     return m.text || '';
   }
 
@@ -321,9 +369,14 @@
 
   // ---------- formatting ----------
   // No timeZone option means the browser's own zone.
-  const fmtShort = new Intl.DateTimeFormat('en-US', { ...zoneOpt, weekday: 'short', hour: 'numeric', minute: '2-digit' });
-  const fmtLong = new Intl.DateTimeFormat('en-US', { ...zoneOpt, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  const fmtClock = new Intl.DateTimeFormat('en-US', { ...zoneOpt, hour: 'numeric', minute: '2-digit' });
+  let fmtShort, fmtLong, fmtClock;
+  function refreshFormatters() {
+    const loc = lang === 'es' ? 'es-MX' : 'en-US';
+    fmtShort = new Intl.DateTimeFormat(loc, { ...zoneOpt, weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    fmtLong = new Intl.DateTimeFormat(loc, { ...zoneOpt, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    fmtClock = new Intl.DateTimeFormat(loc, { ...zoneOpt, hour: 'numeric', minute: '2-digit' });
+  }
+  refreshFormatters();
   function fmtTime(iso) {
     const d = new Date(iso);
     if (isNaN(d)) return '';
@@ -335,12 +388,12 @@
   const canSpeak = () => 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
   function speak(text) {
     if (!text) return;
-    if (!canSpeak()) { showError('Read aloud is not available here.'); return; }
+    if (!canSpeak()) { showError('error.noSpeech'); return; }
     const gen = ++speechGen;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US';
-    u.onerror = () => { if (gen === speechGen) showError('Could not read aloud.'); };
+    u.lang = lang === 'es' ? 'es-MX' : 'en-US';
+    u.onerror = () => { if (gen === speechGen) showError('error.speechFail'); };
     speechSynthesis.speak(u);
   }
   // AudioContext only exists for the ~0.5 s of a chime, then it's closed (no idle audio hardware).
@@ -371,7 +424,7 @@
     clearTimeout(bannerTimer);
     bannerTimer = setTimeout(() => { $('banner').hidden = true; document.body.classList.remove('new'); }, 6000);
     if (!saver) { try { if (navigator.vibrate) navigator.vibrate(60); } catch { /* ignore */ } }
-    if (auto) speak(assistantName + ' says: ' + text);
+    if (auto) speak(t('speech.says', { name: assistantName, text: text }));
     scrollEnd();
     // A new message puts the highlight back on its reply row, unless the wearer
     // is typing or a confirm dialog is open.
@@ -417,10 +470,51 @@
   }
 
   const saveOutbox = () => store.set(LS_OUT, JSON.stringify(outbox.map(({ id, t, armored, state }) => ({ id, t, armored, state }))));
-  function showError(msg) { const e = $('error'); e.textContent = msg || ''; e.hidden = !msg; }
-  function setStatus(kind, msg) { const s = $('send-status'); s.dataset.kind = kind || ''; s.textContent = msg || ''; }
-  const setChecked = (msg) => { $('checked').textContent = msg; };
-  function showLock(msg) {
+  let errorKey = '', errorVars = null;
+  function showError(key, vars) {
+    errorKey = key || '';
+    errorVars = vars || null;
+    paintError();
+  }
+  function paintError() {
+    const e = $('error');
+    e.textContent = errorKey ? t(errorKey, errorVars) : '';
+    e.hidden = !errorKey;
+  }
+  let statusKind = '', statusKey = '', statusVars = null;
+  function setStatus(kind, key, vars) {
+    statusKind = kind || '';
+    statusKey = key || '';
+    statusVars = vars || null;
+    paintStatus();
+  }
+  function paintStatus() {
+    const s = $('send-status');
+    s.dataset.kind = statusKind;
+    s.textContent = statusKey ? t(statusKey, statusVars) : '';
+  }
+  let checkedKey = '', checkedAt = 0;
+  function setChecked(key, at) {
+    checkedKey = key || '';
+    checkedAt = at || 0;
+    paintChecked();
+  }
+  function paintChecked() {
+    const el = $('checked');
+    if (!checkedKey) { el.textContent = ''; return; }
+    const time = checkedAt ? fmtClock.format(new Date(checkedAt)) : '';
+    el.textContent = t(checkedKey, { time });
+  }
+  let lockKey = '';
+  function setLock(key) {
+    lockKey = key || '';
+    paintLock();
+  }
+  function paintLock() {
+    const el = $('lock-status');
+    if (el) el.textContent = lockKey ? t(lockKey) : '';
+  }
+  function showLock(key) {
     sleep();
     if (aboutOpen) {
       aboutOpen = false;
@@ -430,7 +524,7 @@
     $('feed').hidden = true;
     $('feed').inert = false;
     $('lock').hidden = false;
-    $('lock-status').textContent = msg || '';
+    setLock(key || '');
   }
   function openAbout() {
     if (aboutOpen || confirmOpen || $('feed').hidden) return;
@@ -456,8 +550,13 @@
   // About hides the feed, but the passphrase session is still open.
   const unlocked = () => $('lock').hidden && (aboutOpen || !$('feed').hidden);
   function renderToggles() {
-    const a = $('auto-btn'); a.textContent = 'Auto-read: ' + (auto ? 'On' : 'Off'); a.setAttribute('aria-pressed', String(auto));
-    const v = $('saver-btn'); v.textContent = 'Saver: ' + (saver ? 'On' : 'Off'); v.setAttribute('aria-pressed', String(saver));
+    const a = $('auto-btn');
+    a.textContent = t(auto ? 'auto.on' : 'auto.off');
+    a.setAttribute('aria-pressed', String(auto));
+    const v = $('saver-btn');
+    v.textContent = t(saver ? 'saver.on' : 'saver.off');
+    v.setAttribute('aria-pressed', String(saver));
+    v.setAttribute('aria-label', t('saver.aria'));
   }
   // Bubble key shared by the transcript and Clear chat. Prefer the id.
   function msgKey(m) {
@@ -481,13 +580,48 @@
   }
   const scrollEnd = () => { const sc = $('scroll'); sc.scrollTop = sc.scrollHeight; };
   function applyLabels() {
-    $('banner').textContent = 'New reply from ' + assistantName;
-    $('msg').placeholder = 'Message ' + assistantName;
-    $('msg').setAttribute('aria-label', 'Message to ' + assistantName);
+    $('banner').textContent = t('banner.new', { name: assistantName });
+    $('msg').placeholder = t('compose.placeholder', { name: assistantName });
+    $('msg').setAttribute('aria-label', t('compose.aria', { name: assistantName }));
+  }
+  function paintPassToggle() {
+    const show = $('pass').type === 'text';
+    const btn = $('pass-toggle');
+    btn.textContent = t(show ? 'lock.hide' : 'lock.show');
+    btn.setAttribute('aria-pressed', String(show));
+    btn.setAttribute('aria-label', t(show ? 'lock.hideAria' : 'lock.showAria'));
+  }
+  function paintLang() {
+    document.querySelectorAll('.lang-pill').forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
+    });
+  }
+  function applyChrome() {
+    document.documentElement.lang = lang === 'es' ? 'es' : 'en';
+    const meta = document.querySelector('meta[name="description"]');
+    if (meta) meta.setAttribute('content', t('meta.description'));
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+    });
+    document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
+      el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria')));
+    });
+    paintLang();
+    applyLabels();
+    renderToggles();
+    paintPassToggle();
+    paintChecked();
+    paintStatus();
+    paintLock();
+    paintError();
+    if (confirmOpen) paintConfirm();
+    if (unlocked()) render();
   }
 
   // ---------- render: keyed diff, only changed bubbles touch the DOM ----------
-  const MARK = { sending: ' · sending…', sent: ' · sent ✓', failed: ' · not sent, tap to retry' };
   const nodes = new Map();   // key -> {li, sig}
   function draftApproved(draftId, hash) {
     if (!hash) return false;
@@ -555,11 +689,12 @@
       const hash = canon ? (hashCache.get(canon) || '') : '';
       const showSend = !!(fields && hash && !draftApproved(fields.draftId, hash));
       const approval = m.role === 'owner' && m.kind === 'send_draft';
-      const label = approval ? '' : (m.role === 'owner' ? 'You · ' : assistantName + ' · ') + fmtTime(m.t) + (m.state ? MARK[m.state] : '');
+      const mark = (m.state === 'sending' || m.state === 'sent' || m.state === 'failed') ? t('mark.' + m.state) : '';
+      const label = approval ? '' : (m.role === 'owner' ? t('bubble.you') : assistantName + ' · ') + fmtTime(m.t) + mark;
       const shown = approval
-        ? ('Approved ✓' + (m.draftId ? '\n' + m.draftId : '') + (m.state === 'failed' ? MARK.failed : ''))
+        ? (t('bubble.approvedMark') + (m.draftId ? '\n' + m.draftId : '') + (m.state === 'failed' ? t('mark.failed') : ''))
         : (draft ? fields.to + '\n' + fields.subject + '\n' + fields.body : m.text);
-      const sig = m.role + '|' + (m.state || '') + '|' + (m.kind || '') + '|' + label + '|' + shown + '|' + (showSend ? '1' : '0');
+      const sig = lang + '|' + m.role + '|' + (m.state || '') + '|' + (m.kind || '') + '|' + label + '|' + shown + '|' + (showSend ? '1' : '0');
       let n = nodes.get(key);
       if (!n) {
         const li = document.createElement('li');
@@ -577,11 +712,11 @@
         const textEl = n.li.querySelector('.text');
         textEl.replaceChildren();
         if (draft) {
-          for (const [name, value] of [['To', fields.to], ['Subject', fields.subject]]) {
+          for (const [nameKey, value] of [['draft.to', fields.to], ['draft.subject', fields.subject]]) {
             const line = document.createElement('div');
             const k = document.createElement('span');
             k.className = 'draft-k';
-            k.textContent = name + ': ';
+            k.textContent = t(nameKey);
             line.append(k, document.createTextNode(value));
             textEl.append(line);
           }
@@ -598,11 +733,12 @@
             btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'send draft-send focusable';
-            btn.textContent = 'Send';
+            btn.textContent = t('compose.send');
             n.li.append(btn);
           }
           btn.hidden = false;
-          btn.setAttribute('aria-label', 'Send draft' + (fields.to ? ' to ' + fields.to : ''));
+          btn.textContent = t('compose.send');
+          btn.setAttribute('aria-label', fields.to ? t('draft.sendTo', { to: fields.to }) : t('draft.send'));
         } else if (btn) {
           // Land on the transcript, not Yes. A second press on Yes would send a plain "Yes".
           // Focus moves before the button is removed so the browser does not shift focus
@@ -619,13 +755,13 @@
       n.li.classList.add('focusable');
       if (draft) {
         n.li.setAttribute('role', 'article');
-        n.li.setAttribute('aria-label', 'Draft email' + (fields && fields.to ? ' to ' + fields.to : ''));
+        n.li.setAttribute('aria-label', fields && fields.to ? t('draft.emailTo', { to: fields.to }) : t('draft.email'));
       } else if (approval) {
         n.li.setAttribute('role', 'article');
-        n.li.setAttribute('aria-label', m.state === 'failed' ? 'Retry sending approval' : 'Approved ' + (m.draftId || ''));
+        n.li.setAttribute('aria-label', m.state === 'failed' ? t('draft.retryApproval') : t('draft.approvedId', { id: m.draftId || '' }));
       } else {
         n.li.setAttribute('role', 'button');
-        n.li.setAttribute('aria-label', m.state === 'failed' ? 'Retry sending' : 'Show quick replies');
+        n.li.setAttribute('aria-label', m.state === 'failed' ? t('bubble.retry') : t('bubble.showReplies'));
       }
       const want = prev ? prev.nextSibling : ol.firstChild;
       if (want !== n.li) ol.insertBefore(n.li, want);
@@ -709,7 +845,7 @@
     if (nc && (!lastHeard || new Date(nc.t) > new Date(lastHeard))) {
       if (alert && lastHeard) { alertNew(spoken(nc)); activity(); }
       lastHeard = nc.t; store.set(LS_HEARD, lastHeard);
-      if (waitUntil) { waitUntil = 0; setStatus('ok', assistantName + ' replied ✓'); }
+      if (waitUntil) { waitUntil = 0; setStatus('ok', 'status.replied', { name: assistantName }); }
     }
   }
 
@@ -721,8 +857,7 @@
   function clearNetError() {
     const e = $('error');
     if (!e || e.hidden) return;
-    const t = e.textContent || '';
-    if (t.startsWith('Offline') || t.startsWith('Could not load')) showError('');
+    if (errorKey === 'error.offline' || errorKey === 'error.loadRefresh') showError('');
   }
   // One catch-up. Right after a send, an optional API copy can be fresher than the site.
   // A newer refresh aborts the previous fetch so a hung request from before display-off
@@ -751,8 +886,8 @@
       try { if (text === null) text = await fetchText(feedUrl, { signal: ctl.signal }); }
       catch (e) {
         if (e.name === 'AbortError' || stopped()) return false;
-        setChecked('Offline · ' + fmtClock.format(new Date()));
-        if (!feedText) showError(navigator.onLine === false ? 'Offline. Check your phone connection.' : 'Could not load messages. Try Refresh.');
+        setChecked('status.offline', Date.now());
+        if (!feedText) showError(navigator.onLine === false ? 'error.offline' : 'error.loadRefresh');
         if (!sseLive && !asleep && !document.hidden) startPolling();
         return false;
       }
@@ -765,9 +900,9 @@
       catch (e) {
         if (e.name === 'AbortError' || stopped()) return false;
         if (e.message === 'nokey') { showLock(); return false; }
-        showError(e.message === 'decrypt' ? 'Could not decrypt. The key changed? Use Forget passphrase.' : 'Message feed is damaged. Try Refresh.');
+        showError(e.message === 'decrypt' ? 'error.keyChanged' : 'error.badFeed');
       }
-      if (!sseLive && !stopped()) setChecked('Checked ' + fmtClock.format(new Date()));
+      if (!sseLive && !stopped()) setChecked('status.checked', Date.now());
       return true;
     } finally {
       clearTimeout(timer);
@@ -850,7 +985,7 @@
       stopPolling();
       clearTimeout(sseWatch); sseWatch = null;
       clearTimeout(reconnectTimer); reconnectTimer = null;
-      setChecked('Live ' + fmtClock.format(new Date()));
+      setChecked('status.live', Date.now());
       clearNetError();
       refresh();
     };
@@ -859,7 +994,7 @@
       if (gen !== esGen || es !== sock) return;
       sseLive = false;
       const closed = sock.readyState === 2;
-      if (!asleep && !document.hidden) setChecked('Reconnecting…');
+      if (!asleep && !document.hidden) setChecked('status.reconnecting');
       if (closed) closeLive();
       if (asleep || document.hidden) return;
       startPolling();
@@ -874,7 +1009,7 @@
     noteClock();
     asleep = false;
     clearNetError();
-    setChecked('Reconnecting…');
+    setChecked('status.reconnecting');
     connectLive(true);
     refresh();
     activity();
@@ -898,7 +1033,7 @@
     clearTimeout(idleTimer); idleTimer = null;
     if (!saver || asleep) return;
     const ms = Math.max(IDLE_MS, waitUntil - Date.now());
-    idleTimer = setTimeout(() => { idleTimer = null; sleep('Paused to save battery · tap to update'); }, ms);
+    idleTimer = setTimeout(() => { idleTimer = null; sleep('status.paused'); }, ms);
   }
   // Stop everything: no connection, no timers. Does not change how long idle waits.
   function sleep(msg) {
@@ -926,7 +1061,7 @@
     live.unshift(m);
     live.sort((a, b) => (Date.parse(b.t) || 0) - (Date.parse(a.t) || 0));
     merge(true);
-    setChecked('Live ' + fmtClock.format(new Date()));
+    setChecked('status.live', Date.now());
   }
 
   // ---------- sending: optimistic, network in the background ----------
@@ -968,17 +1103,17 @@
     }
     if (!outbox.includes(o)) return;                 // already showed up in the feed
     o.state = ok ? 'sent' : 'failed'; saveOutbox(); render();
-    if (!ok) setStatus('err', 'Not sent. Tap the red message to retry.');
-    else if (waitUntil) setStatus('ok', 'Sent ✓ Waiting for ' + assistantName + '…');
+    if (!ok) setStatus('err', 'status.notSent');
+    else if (waitUntil) setStatus('ok', 'status.waiting', { name: assistantName });
   }
   function startWaiting() { waitUntil = Date.now() + WAIT_MS; wake(); startPolling(true); }
   // Chat Send and a draft's Send share delivery. extra is set only for kind send_draft.
   async function queueOwner(text, extra) {
     if (!emailConfigured() && !BACKUP) {
-      setStatus('err', 'Sending is not set up. For email, set config.js line 9 (web3formsKey) or line 14 (formsubmitId). For ntfy, set line 19 (ntfyTopic).');
+      setStatus('err', 'status.notSetup');
       return false;
     }
-    if (!keyRec || !feedSalt) { setStatus('err', 'Not ready yet. Tap Refresh, then try again.'); return false; }
+    if (!keyRec || !feedSalt) { setStatus('err', 'status.notReady'); return false; }
     const m = await encryptMessage(text, keyRec.key, feedSalt, feedIter, extra);
     rememberSeen(m.id);   // the live echo of this send is not a second message
     const o = { ...m, state: 'sending' };
@@ -986,7 +1121,7 @@
     if (extra && extra.kind === 'send_draft') outMeta.set(o.id, { role: 'owner', kind: 'send_draft', draftId: String(extra.draftId || ''), draftHash: String(extra.draftHash || '') });
     outbox.push(o); saveOutbox();
     render(); scrollEnd();
-    setStatus('busy', 'Sending in the background…');
+    setStatus('busy', 'status.sending');
     startWaiting();
     if (emailConfigured()) backupCopy(o);
     deliver(o);
@@ -996,7 +1131,7 @@
     const input = $('msg');
     const fromField = typeof preset !== 'string';
     const text = (fromField ? input.value : preset).trim();
-    if (!text) { setStatus('err', 'Type or speak a message first.'); input.focus(); return; }
+    if (!text) { setStatus('err', 'status.needText'); input.focus(); return; }
     const queued = await queueOwner(text);
     if (queued && fromField) input.value = '';
   }
@@ -1021,31 +1156,30 @@
   // ---------- unlock / start ----------
   async function unlock(pass) {
     let text;
-    try { text = await fetchText(feedUrl); } catch { $('lock-status').textContent = 'Could not load messages. Check your connection.'; return false; }
+    try { text = await fetchText(feedUrl); } catch { setLock('lock.loadFail'); return false; }
     try {
       const feed = JSON.parse(text);
-      if (!feed.items || !feed.items.length) { $('lock-status').textContent = 'No messages yet. Try again later.'; return false; }
+      if (!feed.items || !feed.items.length) { setLock('lock.empty'); return false; }
       feedText = null;
       await applyFeed(text, { pass, alert: false });
     } catch (e) {
-      $('lock-status').textContent = e.message === 'decrypt' ? 'Could not decrypt. Wrong passphrase?' : 'Message feed is damaged. Try again.';
+      setLock(e.message === 'decrypt' ? 'lock.badPass' : 'lock.badFeed');
       return false;
     }
     store.set(LS_PASS, pass);
     showFeed(); scrollEnd();
-    setChecked('Checked ' + fmtClock.format(new Date()));
+    setChecked('status.checked', Date.now());
     wake();
     return true;
   }
 
   async function start() {
-    applyLabels();
-    renderToggles();
+    applyChrome();
     const cached = store.get(LS_FEED);
     const hasPass = Boolean(store.get(LS_PASS));
     if (!hasPass && !(await idb.get())) { showLock(); return; }
     showFeed();
-    setChecked('Updating…');
+    setChecked('status.updating');
     if (cached) {   // instant: last feed from this device, decrypted with the stored key
       try { await applyFeed(cached, { alert: false }); scrollEnd(); } catch (e) { if (e.message === 'nokey') { showLock(); return; } }
     }
@@ -1076,16 +1210,13 @@
     const show = input.type === 'password';
     input.type = show ? 'text' : 'password';
     input.classList.toggle('secret', !show);
-    const btn = $('pass-toggle');
-    btn.textContent = show ? 'Hide' : 'Show';
-    btn.setAttribute('aria-pressed', String(show));
-    btn.setAttribute('aria-label', show ? 'Hide passphrase' : 'Show passphrase');
+    paintPassToggle();
   });
   $('unlock-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const v = $('pass').value.trim();
-    if (!v) { $('lock-status').textContent = 'Enter your passphrase.'; return; }
-    $('lock-status').textContent = 'Unlocking…';
+    if (!v) { setLock('lock.needPass'); return; }
+    setLock('lock.unlocking');
     if (await unlock(v)) { $('pass').value = ''; focusPrimary(); }
   });
   $('compose').addEventListener('submit', (ev) => { ev.preventDefault(); send(); });
@@ -1105,7 +1236,7 @@
     const failed = ev.target.closest('li.failed');
     if (failed) {
       const o = outbox.find((x) => x.id === failed.dataset.id);
-      if (o) { setStatus('busy', 'Retrying in the background…'); startWaiting(); deliver(o); }
+      if (o) { setStatus('busy', 'status.retrying'); startWaiting(); deliver(o); }
       return;
     }
     // Select on a transcript bubble brings its reply row back, even after the
@@ -1113,12 +1244,15 @@
     if (ev.target.closest('li.msg')) focusReplyRow();
   });
   $('read-btn').addEventListener('click', () => { const m = latestChief(); if (m) speak(spoken(m)); });
-  $('refresh-btn').addEventListener('click', () => { setChecked('Checking…'); refresh(); });
+  $('refresh-btn').addEventListener('click', () => { setChecked('status.checking'); refresh(); });
   $('auto-btn').addEventListener('click', () => {
     auto = !auto; store.set(LS_AUTO, auto ? 'on' : 'off'); renderToggles();
     if (!auto && canSpeak()) speechSynthesis.cancel();
   });
   $('saver-btn').addEventListener('click', () => { saver = !saver; store.set(LS_SAVER, saver ? 'on' : 'off'); renderToggles(); activity(); });
+  document.querySelectorAll('.lang-pill').forEach((btn) => {
+    btn.addEventListener('click', () => setLang(btn.dataset.lang));
+  });
   $('about-btn').addEventListener('click', openAbout);
   $('about-back').addEventListener('click', () => closeAbout(false));
   $('banner').addEventListener('click', () => { $('banner').hidden = true; document.body.classList.remove('new'); const m = latestChief(); if (m) speak(spoken(m)); });
@@ -1136,17 +1270,19 @@
     $('feed').inert = on;
     $('lock').inert = on;
   }
+  function paintConfirm() {
+    const clearing = confirmKind === 'clear';
+    $('confirm-text').textContent = t(clearing ? 'confirm.clearText' : 'confirm.forgetText');
+    const go = $('confirm-forget');
+    go.textContent = t(clearing ? 'confirm.clear' : 'confirm.forget');
+    go.setAttribute('aria-label', t(clearing ? 'confirm.clearAria' : 'confirm.forgetAria'));
+  }
   function askConfirm(kind) {
     if (confirmOpen) return;
     if (kind === 'clear' && (aboutOpen || $('feed').hidden)) return;
     confirmKind = kind;
     const clearing = kind === 'clear';
-    $('confirm-text').textContent = clearing
-      ? 'Clear chat? Hides messages on this device. Passphrase stays.'
-      : 'Forget key? This signs you out of Chief.';
-    const go = $('confirm-forget');
-    go.textContent = clearing ? 'Clear' : 'Forget';
-    go.setAttribute('aria-label', clearing ? 'Clear chat' : 'Forget passphrase');
+    paintConfirm();
     setCovered(true);
     try { history.pushState({ chief: clearing ? 'confirm-clear' : 'confirm-forget' }, ''); } catch { /* ignore */ }
     $('confirm-cancel').focus();
@@ -1199,7 +1335,7 @@
     keyRec = null; messages = []; feedMsgs = []; live = []; outbox = []; outText.clear(); outMeta.clear(); hashCache.clear(); feedText = null; feedSalt = null; waitUntil = 0; lastHeard = '';
     if (canSpeak()) speechSynthesis.cancel();
     render(); setStatus('', '');
-    showLock('Passphrase forgotten.');
+    showLock('lock.forgotten');
     $('pass').focus();
   }
   $('clear-btn').addEventListener('click', () => askConfirm('clear'));
