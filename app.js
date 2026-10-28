@@ -4,14 +4,20 @@
   const CFG = window.CHIEF_CONFIG || {};
   const LS_PASS = 'chief.pass', LS_AUTO = 'chief.auto', LS_FEED = 'chief.feedCache';
   const LS_OUT = 'chief.outbox', LS_HEARD = 'chief.lastHeard', LS_SAVER = 'chief.saver';
-  const LS_SEEN_IDS = 'chief.seenIds', LS_SEEN_T = 'chief.seenT';
+  const LS_SEEN_IDS = 'chief.seenIds';
   const QS = new URLSearchParams(location.search);
   const showQuick = QS.get('replies') !== '0';   // on in the normal app; ?replies=0 hides them
   // Battery: the live channel (SSE) is the only network activity while healthy. The feed is polled only
   // while that channel is down, with backoff. Everything stops when hidden or idle.
+  // After display-off the previous EventSource is often dead. Wake tears it down, catches up once,
+  // and polls only until a new stream is open. Idle sleep while the display stays on is unchanged.
   const BACKOFF_MS = [5000, 10000, 20000, 60000];
   const IDLE_MS = +QS.get('idle') || 3 * 60000;     // battery saver: sleep after this long with no taps/messages
   const WAIT_MS = 5 * 60000;                         // stay awake this long after a send, waiting for the reply
+  const SSE_OPEN_MS = 15000;                         // hung CONNECTING after a wake: give up and poll
+  const RECONNECT_MS = 12000;                        // try a fresh stream again while still visible
+  const SEEN_MAX = 500;                              // replay window; the feed itself only keeps ~20
+  const STALE_SKEW_MS = 5000;                        // live messages this far behind the feed window are replays
   const MAX_SHOWN = 20;
   const W3F = 'https://api.web3forms.com/submit';
   const SUBJECT_FALLBACK = 'Chief app message';
@@ -271,41 +277,43 @@
   }
 
   // ---------- replay protection ----------
-  // Live updates (not the saved feed) drop a message we have already accepted,
-  // and drop one whose time is older than the newest time we have accepted.
-  // The feed itself still shows its history.
-  let seenIds = new Set((getJSON(LS_SEEN_IDS, []) || []).filter((x) => typeof x === 'string'));
-  let seenT = store.get(LS_SEEN_T) || '';
-  function isReplay(m) {
-    if (!m) return true;
-    if (m.id && seenIds.has(m.id)) return true;
-    const ms = Date.parse(m.t);
-    const prev = Date.parse(seenT);
-    if (!Number.isNaN(ms) && !Number.isNaN(prev) && ms < prev) return true;
-    return false;
+  // Ids we have already accepted. A second copy (feed duplicate, ntfy replay, rolled-off ct)
+  // must not alert, duplicate a bubble, or look like a new approval. The feed file stays the
+  // source of truth for what is on screen; this set only rejects extras. Outbox retry is a
+  // resend of an entry we already created, not an inbound id, so it is not gated here.
+  let seenOrder = getJSON(LS_SEEN_IDS, []);
+  if (!Array.isArray(seenOrder)) seenOrder = [];
+  seenOrder = seenOrder.filter((x) => typeof x === 'string' && x);
+  if (seenOrder.length > SEEN_MAX) seenOrder = seenOrder.slice(-SEEN_MAX);
+  const seenIds = new Set(seenOrder);
+  function rememberSeen(ids) {
+    const list = Array.isArray(ids) ? ids : [ids];
+    let changed = false;
+    for (const id of list) {
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+      seenOrder.push(id);
+      changed = true;
+    }
+    if (!changed) return;
+    if (seenOrder.length > SEEN_MAX) {
+      for (const old of seenOrder.splice(0, seenOrder.length - SEEN_MAX)) seenIds.delete(old);
+    }
+    store.set(LS_SEEN_IDS, JSON.stringify(seenOrder));
   }
   function noteSeen(list) {
-    let dirty = false;
-    let best = Date.parse(seenT);
-    for (const m of list) {
-      if (!m) continue;
-      if (m.id && !seenIds.has(m.id)) { seenIds.add(m.id); dirty = true; }
-      const ms = Date.parse(m.t);
-      if (!Number.isNaN(ms) && (Number.isNaN(best) || ms > best)) { best = ms; seenT = m.t; dirty = true; }
-    }
-    if (seenIds.size > 500) { seenIds = new Set([...seenIds].slice(-400)); dirty = true; }
-    if (!dirty) return;
-    store.set(LS_SEEN_IDS, JSON.stringify([...seenIds]));
-    if (seenT) store.set(LS_SEEN_T, seenT);
+    rememberSeen((Array.isArray(list) ? list : []).map((m) => m && m.id));
   }
-  // Same message id later in the feed replaces the earlier copy, so a draft
-  // whose content changed is the one on screen.
-  function uniqueById(list) {
-    const index = new Map();
-    const out = [];
+  // First copy of an id wins. The feed is oldest-first, so a replay appended later is dropped
+  // and the original approval / bubble stays. The same ciphertext is also one message,
+  // including when an item has no id.
+  function dedupeInbound(list) {
+    const ids = new Set(), cts = new Set(), out = [];
     for (const m of list) {
-      if (m.id && index.has(m.id)) { out[index.get(m.id)] = m; continue; }
-      if (m.id) index.set(m.id, out.length);
+      if (m.id && ids.has(m.id)) continue;
+      if (m.ct && cts.has(m.ct)) continue;
+      if (m.id) ids.add(m.id);
+      if (m.ct) cts.add(m.ct);
       out.push(m);
     }
     return out;
@@ -383,10 +391,28 @@
   const rendered = new Map();          // bubble key -> message, for the draft Send button
   let aboutOpen = false;
   let feedText = null, feedSalt = null, feedIter = 310000;
-  let busy = false, waitUntil = 0;
+  let waitUntil = 0;
   let auto = store.get(LS_AUTO) !== 'off';
   let saver = store.get(LS_SAVER) !== 'off';
   let lastHeard = store.get(LS_HEARD) || '';   // newest assistant message already alerted/seen
+  // A live item older than the whole feed window was already dropped by the publisher.
+  // New messages are newer than that window, so they stay. The feed file itself is not filtered.
+  function liveIsStale(m) {
+    const t = Date.parse(m.t);
+    if (!Number.isFinite(t) || !feedMsgs.length) return false;
+    let oldest = Infinity;
+    for (const f of feedMsgs) {
+      const n = Date.parse(f.t);
+      if (Number.isFinite(n) && n < oldest) oldest = n;
+    }
+    return oldest !== Infinity && t < oldest - STALE_SKEW_MS;
+  }
+  function isReplay(m) {
+    if (!m) return true;
+    if (m.id && (seenIds.has(m.id) || outbox.some((o) => o.id === m.id) || feedMsgs.some((f) => f.id === m.id) || live.some((f) => f.id === m.id))) return true;
+    if (m.ct && (feedMsgs.some((f) => f.ct === m.ct) || live.some((f) => f.ct === m.ct))) return true;
+    return liveIsStale(m);
+  }
 
   const saveOutbox = () => store.set(LS_OUT, JSON.stringify(outbox.map(({ id, t, armored, state }) => ({ id, t, armored, state }))));
   function showError(msg) { const e = $('error'); e.textContent = msg || ''; e.hidden = !msg; }
@@ -566,7 +592,13 @@
           }
           btn.hidden = false;
           btn.setAttribute('aria-label', 'Send draft' + (fields.to ? ' to ' + fields.to : ''));
-        } else if (btn) btn.remove();
+        } else if (btn) {
+          // Land on the transcript, not Yes. A second press on Yes would send a plain "Yes".
+          // Focus moves before the button is removed so the browser does not shift focus
+          // onto the quick-reply row as the button disappears.
+          if (document.activeElement === btn) $('scroll').focus();
+          btn.remove();
+        }
         n.sig = sig;
       }
       // A bubble can take the highlight (a new message does). Select on it
@@ -621,8 +653,11 @@
   }
 
   // Apply a feed (raw JSON text). Decrypts only when the text changed.
+  // feedEpoch drops a slow decrypt that lost the race with a newer fetch or with sleep.
+  let feedEpoch = 0;
   async function applyFeed(text, { pass = null, alert = true } = {}) {
     if (text === feedText && !pass) return true;
+    const epoch = ++feedEpoch;
     let feed;
     try { feed = JSON.parse(text); } catch { throw new Error('bad-feed'); }
     if (!feed || feed.v !== 1 || !Array.isArray(feed.items)) throw new Error('bad-feed');
@@ -630,7 +665,9 @@
     if (feed.items.length) {
       const iter = feed.iter || 310000;
       const key = await keyFor(feed.salt, iter, pass);
-      list = uniqueById(await decryptItems(feed, key));
+      if (epoch !== feedEpoch) return false;
+      list = dedupeInbound(await decryptItems(feed, key));
+      if (epoch !== feedEpoch) return false;
       if (!keyRec || keyRec.key !== key) remember(feed.salt, iter, key);
       feedSalt = feed.salt; feedIter = iter;
       for (const o of outbox) if (!outText.has(o.id)) {
@@ -641,10 +678,11 @@
         } catch { /* drop later */ }
       }
     }
-    noteSeen(list);
+    if (epoch !== feedEpoch) return false;
     feedText = text;
     store.set(LS_FEED, text);
     feedMsgs = list;
+    rememberSeen(feedMsgs.map((m) => m.id));
     merge(alert);
     return true;
   }
@@ -669,63 +707,181 @@
     if (!r.ok) throw new Error('http-' + r.status);
     return r.text();
   }
+  function clearNetError() {
+    const e = $('error');
+    if (!e || e.hidden) return;
+    const t = e.textContent || '';
+    if (t.startsWith('Offline') || t.startsWith('Could not load')) showError('');
+  }
   // One catch-up. Right after a send, an optional API copy can be fresher than the site.
+  // A newer refresh aborts the previous fetch so a hung request from before display-off
+  // cannot keep the next catch-up from running.
+  let refreshGen = 0, refreshCtl = null;
+  function cancelRefresh() {
+    refreshGen++;
+    feedEpoch++;
+    if (refreshCtl) { refreshCtl.abort(); refreshCtl = null; }
+  }
   async function refresh() {
-    if (busy || !unlocked()) return false;
-    busy = true;
+    if (!unlocked()) return false;
+    const gen = ++refreshGen;
+    if (refreshCtl) refreshCtl.abort();
+    const ctl = new AbortController();
+    refreshCtl = ctl;
+    const timer = setTimeout(() => ctl.abort(), 20000);
+    const stopped = () => gen !== refreshGen;
     try {
       let text = null;
       if (apiFeedUrl && Date.now() < waitUntil) {
-        try { text = await fetchText(apiFeedUrl, { headers: { Accept: 'application/vnd.github.raw+json' } }); } catch { /* fall back */ }
+        try { text = await fetchText(apiFeedUrl, { headers: { Accept: 'application/vnd.github.raw+json' }, signal: ctl.signal }); }
+        catch (e) { if (e.name === 'AbortError' || stopped()) return false; /* fall back */ }
       }
-      try { if (text === null) text = await fetchText(feedUrl); }
-      catch {
+      if (stopped()) return false;
+      try { if (text === null) text = await fetchText(feedUrl, { signal: ctl.signal }); }
+      catch (e) {
+        if (e.name === 'AbortError' || stopped()) return false;
         setChecked('Offline · ' + fmtClock.format(new Date()));
         if (!feedText) showError(navigator.onLine === false ? 'Offline. Check your phone connection.' : 'Could not load messages. Try Refresh.');
+        if (!sseLive && !asleep && !document.hidden) startPolling();
         return false;
       }
-      try { await applyFeed(text); showError(''); }
+      if (stopped()) return false;
+      try {
+        const applied = await applyFeed(text);
+        if (stopped() || applied === false) return false;
+        showError('');
+      }
       catch (e) {
+        if (e.name === 'AbortError' || stopped()) return false;
         if (e.message === 'nokey') { showLock(); return false; }
         showError(e.message === 'decrypt' ? 'Could not decrypt. The key changed? Use Forget passphrase.' : 'Message feed is damaged. Try Refresh.');
       }
-      if (!sseLive) setChecked('Checked ' + fmtClock.format(new Date()));
+      if (!sseLive && !stopped()) setChecked('Checked ' + fmtClock.format(new Date()));
       return true;
-    } finally { busy = false; }
+    } finally {
+      clearTimeout(timer);
+      if (refreshCtl === ctl) refreshCtl = null;
+    }
   }
 
   // ---------- connection manager: live channel first, backoff polling only while it's down ----------
   let es = null, sseLive = false, asleep = true;
   let pollTimer = null, pollStep = 0, idleTimer = null;
+  let sseWatch = null, reconnectTimer = null, freshTimer = null, esGen = 0;
+  // Date.now() jumps across a freeze; performance.now() does not. The gap means the
+  // display slept even when no visibility event was delivered. Idle time with the
+  // page actually running does not move this, so battery-saver sleep stays as it was.
+  let clockSkew = Date.now() - performance.now();
+  function noteClock() { clockSkew = Date.now() - performance.now(); }
+  function wasSuspended() {
+    const skew = Date.now() - performance.now();
+    const jumped = skew - clockSkew > 4000;
+    clockSkew = skew;
+    return jumped;
+  }
   function startPolling(reset) {
     if (reset) pollStep = 0;
-    if (pollTimer || sseLive || asleep) return;
+    if (pollTimer || sseLive || asleep || document.hidden) return;
     const ms = BACKOFF_MS[Math.min(pollStep, BACKOFF_MS.length - 1)];
     pollTimer = setTimeout(async () => { pollTimer = null; pollStep++; await refresh(); startPolling(); }, ms);
   }
   function stopPolling() { clearTimeout(pollTimer); pollTimer = null; }
-  function connectLive() {
-    if (es) return;
+  function closeLive() {
+    esGen++;
+    clearTimeout(sseWatch); sseWatch = null;
+    clearTimeout(reconnectTimer); reconnectTimer = null;
+    const sock = es;
+    es = null;
+    sseLive = false;
+    if (sock) {
+      sock.onopen = sock.onmessage = sock.onerror = null;
+      try { sock.close(); } catch { /* ignore */ }
+    }
+    stopPolling();
+  }
+  function armSseWatch(gen) {
+    clearTimeout(sseWatch); sseWatch = null;
+    if (!window.EventSource || !BACKUP) return;
+    sseWatch = setTimeout(() => {
+      sseWatch = null;
+      if (gen !== esGen || asleep || document.hidden || sseLive) return;
+      // Still not open. The browser retry often never fires after a long freeze.
+      closeLive();
+      startPolling(true);
+      refresh();
+      scheduleReconnect();
+    }, SSE_OPEN_MS);
+  }
+  function scheduleReconnect() {
+    if (reconnectTimer || asleep || document.hidden || sseLive || !BACKUP || !window.EventSource) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (asleep || document.hidden || sseLive || !unlocked()) return;
+      connectLive(true);
+    }, RECONNECT_MS);
+  }
+  function connectLive(force = false) {
+    // A CLOSED socket will not retry. OPEN/CONNECTING after a freeze can be a zombie,
+    // so a wake from sleep passes force and always builds a new one.
+    // No ntfy topic (the public demo, until config.js line 19 is set): poll the feed.
+    if (!force && es && es.readyState !== 2) return;
+    closeLive();
     if (!BACKUP || !window.EventSource) { startPolling(); return; }
-    try { es = new EventSource(BACKUP + '/sse'); } catch { es = null; startPolling(); return; }
-    es.onopen = () => { sseLive = true; pollStep = 0; stopPolling(); setChecked('Live ' + fmtClock.format(new Date())); refresh(); };
-    es.onmessage = onLive;
-    es.onerror = () => {           // EventSource retries on its own; poll (with backoff) only while it's down
+    const gen = esGen;
+    let sock;
+    try { sock = new EventSource(BACKUP + '/sse'); } catch { startPolling(); return; }
+    es = sock;
+    armSseWatch(gen);
+    sock.onopen = () => {
+      if (gen !== esGen || es !== sock) return;
+      sseLive = true;
+      pollStep = 0;
+      stopPolling();
+      clearTimeout(sseWatch); sseWatch = null;
+      clearTimeout(reconnectTimer); reconnectTimer = null;
+      setChecked('Live ' + fmtClock.format(new Date()));
+      clearNetError();
+      refresh();
+    };
+    sock.onmessage = (ev) => { if (gen === esGen && es === sock) onLive(ev); };
+    sock.onerror = () => {
+      if (gen !== esGen || es !== sock) return;
       sseLive = false;
-      setChecked('Reconnecting…');
-      if (es && es.readyState === 2) { es.close(); es = null; }
+      const closed = sock.readyState === 2;
+      if (!asleep && !document.hidden) setChecked('Reconnecting…');
+      if (closed) closeLive();
+      if (asleep || document.hidden) return;
       startPolling();
+      if (closed) scheduleReconnect();
     };
   }
-  function closeLive() { if (es) { es.close(); es = null; } sseLive = false; }
-  // Wake up (tap, focus, visible, send): connect, catch up once, (re)arm the idle timer.
-  function wake() {
-    if (!unlocked() || document.hidden) return;
-    const was = asleep;
+  // Full reconnect after hide, freeze, or a dead socket. Catch up immediately; do not
+  // wait for onopen, which may never fire. Idle sleep itself is still activity()'s job.
+  function wakeFresh() {
+    if (!unlocked() || document.hidden) return false;
+    if (freshTimer) { clearTimeout(freshTimer); freshTimer = null; }
+    noteClock();
     asleep = false;
-    connectLive();
-    if (was && !BACKUP) refresh();
+    clearNetError();
+    setChecked('Reconnecting…');
+    connectLive(true);
+    refresh();
     activity();
+    return true;
+  }
+  function scheduleWakeFresh() {
+    if (document.hidden || !unlocked()) return;
+    if (freshTimer) return;
+    freshTimer = setTimeout(() => { freshTimer = null; wakeFresh(); }, 0);
+  }
+  // Wake up (tap, focus, visible, send): connect, and if we were asleep or frozen, catch up.
+  function wake() {
+    if (!unlocked() || document.hidden) return false;
+    const suspended = wasSuspended();
+    if (asleep || suspended) return wakeFresh();
+    connectLive();
+    activity();
+    return true;
   }
   function activity() {
     clearTimeout(idleTimer); idleTimer = null;
@@ -733,10 +889,12 @@
     const ms = Math.max(IDLE_MS, waitUntil - Date.now());
     idleTimer = setTimeout(() => { idleTimer = null; sleep('Paused to save battery · tap to update'); }, ms);
   }
-  // Stop everything: no connection, no timers.
+  // Stop everything: no connection, no timers. Does not change how long idle waits.
   function sleep(msg) {
     asleep = true;
-    closeLive(); stopPolling();
+    if (freshTimer) { clearTimeout(freshTimer); freshTimer = null; }
+    closeLive();
+    cancelRefresh();
     clearTimeout(idleTimer); idleTimer = null;
     if (msg) setChecked(msg);
   }
@@ -751,8 +909,9 @@
     if (feedMsgs.some((m) => m.ct === d.item.ct) || live.some((m) => m.ct === d.item.ct)) return;
     let m;
     try { [m] = await decryptItems({ items: [d.item] }, keyRec.key); } catch { return; }   // not ours: ignore
-    if ((m.id && (feedMsgs.some((x) => x.id === m.id) || live.some((x) => x.id === m.id))) || isReplay(m)) return;
-    noteSeen([m]);
+    if (asleep || document.hidden) return;   // wake's catch-up refresh will apply the feed copy
+    if (isReplay(m)) return;                  // duplicate id, known ct, or behind the feed window
+    if (m.id) rememberSeen(m.id);
     live.unshift(m);
     live.sort((a, b) => (Date.parse(b.t) || 0) - (Date.parse(a.t) || 0));
     merge(true);
@@ -810,6 +969,7 @@
     }
     if (!keyRec || !feedSalt) { setStatus('err', 'Not ready yet. Tap Refresh, then try again.'); return false; }
     const m = await encryptMessage(text, keyRec.key, feedSalt, feedIter, extra);
+    rememberSeen(m.id);   // the live echo of this send is not a second message
     const o = { ...m, state: 'sending' };
     outText.set(o.id, text);
     if (extra && extra.kind === 'send_draft') outMeta.set(o.id, { role: 'owner', kind: 'send_draft', draftId: String(extra.draftId || ''), draftHash: String(extra.draftHash || '') });
@@ -836,12 +996,15 @@
     const f = draftFields(m);
     const canon = draftCanonical(f.to, f.subject, f.body);
     if (sendingDraft.has(canon)) return;
-    const hash = hashCache.get(canon) || await draftHash(f.to, f.subject, f.body);
-    hashCache.set(canon, hash);
-    if (draftApproved(f.draftId, hash)) return;
+    const focused = document.activeElement;
+    if (focused && focused.classList && focused.classList.contains('draft-send')) $('scroll').focus();
     sendingDraft.add(canon);
-    try { await queueOwner(sendDraftText(f.draftId, hash), { kind: 'send_draft', draftId: f.draftId, draftHash: hash }); }
-    finally { sendingDraft.delete(canon); }
+    try {
+      const hash = hashCache.get(canon) || await draftHash(f.to, f.subject, f.body);
+      hashCache.set(canon, hash);
+      if (draftApproved(f.draftId, hash)) return;
+      await queueOwner(sendDraftText(f.draftId, hash), { kind: 'send_draft', draftId: f.draftId, draftHash: hash });
+    } finally { sendingDraft.delete(canon); }
   }
 
   // ---------- unlock / start ----------
@@ -872,7 +1035,6 @@
     if (!hasPass && !(await idb.get())) { showLock(); return; }
     showFeed();
     setChecked('Updating…');
-    wake();
     if (cached) {   // instant: last feed from this device, decrypted with the stored key
       try { await applyFeed(cached, { alert: false }); scrollEnd(); } catch (e) { if (e.message === 'nokey') { showLock(); return; } }
     }
@@ -881,7 +1043,9 @@
     for (const o of outbox) if (o.state === 'sending') o.state = 'failed';   // app was closed mid-send
     saveOutbox();
     render();
-    if (!es) refresh();   // a live channel's onopen does its own catch-up
+    // Cache is on screen before the catch-up fetch, so a late decrypt cannot cover a newer feed.
+    // A hidden start stays quiet; visibility/resume reconnects when the display is back.
+    if (!document.hidden && !wake()) refresh();
     if (unlocked()) focusPrimary();
   }
   // Put the highlight on the first quick reply so a swipe can reach it.
@@ -973,7 +1137,7 @@
     setCovered(false);
     if (drop) history.back();
     for (const k of [LS_PASS, LS_FEED, LS_OUT, LS_HEARD]) store.del(k);
-    // Seen ids and the newest timestamp stay, so an old copied message still will not pop up.
+    // Seen ids stay, so an old copied message still will not pop up.
     idb.clear();
     sleep();
     keyRec = null; messages = []; feedMsgs = []; live = []; outbox = []; outText.clear(); outMeta.clear(); hashCache.clear(); feedText = null; feedSalt = null; waitUntil = 0; lastHeard = '';
@@ -1103,11 +1267,17 @@
     clearTimeout(bannerTimer);
     if (canSpeak()) { try { speechSynthesis.cancel(); } catch { /* ignore */ } }
   }
-  document.addEventListener('visibilitychange', () => { if (document.hidden) shutdown(); else wake(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) shutdown(); else scheduleWakeFresh(); });
   window.addEventListener('pagehide', () => shutdown());
   document.addEventListener('freeze', () => shutdown());
-  window.addEventListener('pageshow', (ev) => { if (ev.persisted && !document.hidden) wake(); });
-  window.addEventListener('online', () => { if (unlocked() && !asleep) { connectLive(); refresh(); } });
+  // resume is the pair of freeze. pageshow covers the back-forward cache. Neither waits
+  // for a tap, so a long display-off comes back on its own.
+  document.addEventListener('resume', () => scheduleWakeFresh());
+  window.addEventListener('pageshow', (ev) => { if (ev.persisted) scheduleWakeFresh(); });
+  window.addEventListener('online', () => {
+    if (!unlocked() || document.hidden || asleep) return;   // idle saver stays paused until a tap
+    if (!sseLive || wasSuspended()) scheduleWakeFresh();
+  });
 
   window.ChiefCrypto = { pbkdf2, decryptItems, encryptMessage, isReplay, noteSeen, draftHash, draftCanonical, isDraft, isSendDraft };
   // Glasses Back exits only when nothing is left to go back to, and the first
