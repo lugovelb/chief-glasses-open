@@ -24,6 +24,10 @@ Nothing to install. The letters stay hidden. Click **Show** if you want to check
 
 ![Forget asks again. Cancel is the highlighted choice.](docs/screenshots/forget.png)
 
+![Clear chat asks again. Cancel is the highlighted choice, and the passphrase stays.](docs/screenshots/clear-confirm.png)
+
+![After Clear chat, this device has no messages. Chief stays unlocked.](docs/screenshots/clear-empty.png)
+
 ![A drafted email with To, Subject, body, and a green Send under that draft.](docs/screenshots/draft.png)
 
 ![After that Send, the bubble says Approved and shows the draft id.](docs/screenshots/draft-approved.png)
